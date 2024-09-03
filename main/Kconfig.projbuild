@@ -1,0 +1,48 @@
+menu "Fire Alarm Configuration"
+
+    choice
+        bool "Select mesh mode type."
+        default MODE_GATEWAY
+        help
+            Mesh function mode.
+
+        config MODE_GATEWAY
+            bool "Gateway controller data"
+        config MODE_NODE
+            bool "Node collect data"
+    endchoice
+
+    config MESH_ROUTE_TABLE_SIZE
+        int "Mesh Routing Table Size"
+        range 1 300
+        default 50
+        help
+            The number of devices over the network(max: 300).
+
+    config MESH_MAX_LAYER
+        int "Mesh Max Layer"
+        range 1 25
+        default 6
+        help
+            Max layer allowed in mesh network.
+
+    config MESH_USE_GLOBAL_DNS_IP
+        bool "Use global DNS IP"
+        default n
+        help
+            Use fixed DNS server IP address. If enabled, root node
+            advertises the specified DNS address in DHCP packets.
+            By default it uses DNS record received from the router.
+
+    config MESH_GLOBAL_DNS_IP
+        hex "Global DNS"
+        depends on MESH_USE_GLOBAL_DNS_IP
+        default 0x08080808
+        help
+            The IP address of global DNS server that is used
+            for internal IP subnet formed by the mesh network
+            if MESH_USE_GLOBAL_DNS_IP is enabled.
+            Note: The IP address is in platform (not network)
+            format.
+
+endmenu
