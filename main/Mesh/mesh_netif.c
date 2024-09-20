@@ -501,24 +501,28 @@ esp_err_t mesh_netifs_start(bool is_root)
 
 esp_err_t mesh_netifs_stop(bool disable_reverse)
 {
-    if (netif_sta && strcmp(esp_netif_get_desc(netif_sta), "sta") == 0 && netif_ap == NULL)
-    {
-        return ESP_OK;
-    }
+    // if (netif_sta && strcmp(esp_netif_get_desc(netif_sta), "sta") == 0 && netif_ap == NULL)
+    // {
+    //     ESP_LOGW(TAG, "Already wifi station, no need to do anything");
+    //     return ESP_OK;
+    // }
 
     if (netif_sta)
     {
         if (strcmp(esp_netif_get_desc(netif_sta), "sta") == 0)
         {
+            ESP_LOGW(TAG, "Already wifi station, no need to do anything");
             esp_netif_action_disconnected(netif_sta, NULL, 0, NULL);
             esp_netif_action_stop(netif_sta, NULL, 0, NULL);
             esp_wifi_clear_default_wifi_driver_and_handlers(netif_sta);
         }
         else
         {
+            ESP_LOGW(TAG, "Already mesh link station, no need to do anything");
             esp_netif_action_disconnected(netif_sta, NULL, 0, NULL);
             mesh_delete_if_driver(esp_netif_get_io_driver(netif_sta));
         }
+        ESP_LOGW(TAG, "Destroying wifi station");
         esp_netif_destroy(netif_sta);
         netif_sta = NULL;
     }

@@ -38,7 +38,6 @@ void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t
   case MQTT_EVENT_CONNECTED:
   {
     ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-    _gb_client = event->client;
     self->_isConnected = true;
     _gb_state_mqtt = MQTT_EVENT_CONNECTED;
     break;
@@ -203,6 +202,7 @@ void Mqtt::init(void *arg)
   esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
   esp_mqtt_client_register_event(client, MQTT_EVENT_ANY, self->mqtt_event_handler, self);
   esp_mqtt_client_start(client);
+  _gb_client = client;
 
   if (_queueReciveMsg == nullptr)
   {
