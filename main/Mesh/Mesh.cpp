@@ -9,6 +9,9 @@
 Mesh *Mesh::_instance = nullptr;
 const uint8_t Mesh::meshId[6] = {0x77, 0x77, 0x77, 0x77, 0x77, 0x76};
 const std::string Mesh::meshPassword = "fire_alarm";
+static QueueHandle_t _queueReciveMsg = nullptr;
+static TaskHandle_t _taskRecieveMsg = nullptr;
+static TaskHandle_t _taskTxDemo = nullptr;
 
 /* router config */
 const std::string Mesh::ssid = "duy123";
@@ -18,6 +21,40 @@ const std::string Mesh::ssid_2 = "Demo box";
 const std::string Mesh::password_2 = "demobox123";
 
 static const char *TAG = "Mesh";
+
+typedef struct
+{
+  mesh_addr_t *from;
+  mesh_data_t *data;
+} mesh_custom_data_t;
+
+void free_mesh_custom_data(mesh_custom_data_t *data)
+{
+  if (data == NULL)
+  {
+    return;
+  }
+  free(data->data);
+  free(data->from);
+  free(data);
+}
+
+void Mesh::transmitDemo(void *arg)
+{
+  Mesh *self = static_cast<Mesh *>(arg);
+  const char *payload = "Hello World";
+  while (true)
+  {
+    /* send message from node -> root */
+    if (esp_mesh_is_root() == false)
+    {
+      ESP_LOGI(TAG, "Sending message to ROOT...");
+      self->sendMessage(NULL, (uint8_t *)payload, strlen(payload));
+    }
+    vTaskDelay((5 * 1000) / portTICK_PERIOD_MS);
+  }
+  vTaskDelete(NULL);
+}
 
 void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
                             int32_t event_id, void *event_data)
@@ -113,6 +150,12 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     self->lastLayer = self->layer;
     self->_isParentConnected = true;
     mesh_netifs_start(esp_mesh_is_root());
+
+    /* start task sending demo */
+    if (esp_mesh_is_root() == false)
+    {
+      xTaskCreate(Mesh::transmitDemo, "transmitDemo", 4 * 1024, self, 8, &_taskTxDemo);
+    }
     break;
   }
   case MESH_EVENT_PARENT_DISCONNECTED:
@@ -124,6 +167,13 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     self->_isParentConnected = false;
     self->layer = esp_mesh_get_layer();
     mesh_netifs_stop(false);
+
+    /* clear task sending demo */
+    if (_taskTxDemo != nullptr)
+    {
+      vTaskDelete(_taskTxDemo);
+      _taskTxDemo = nullptr;
+    }
     break;
   }
   case MESH_EVENT_LAYER_CHANGE:
@@ -242,6 +292,97 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
   default:
     ESP_LOGI(TAG, "unknown id:%" PRId32 "", event_id);
     break;
+  }
+}
+
+void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data)
+{
+  /* step 1: malloc mesh_custom_data_t pointer */
+  mesh_custom_data_t *custom_data = (mesh_custom_data_t *)malloc(sizeof(mesh_custom_data_t));
+  if (custom_data == NULL)
+  {
+    ESP_LOGE(TAG, "Malloc mesh_custom_data_t failed.");
+    return;
+  }
+  custom_data->from = (mesh_addr_t *)malloc(sizeof(mesh_addr_t));
+  custom_data->data = (mesh_data_t *)malloc(sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)));
+
+  /* step 2: copy data */
+  memcpy(custom_data->from, from, sizeof(mesh_addr_t));
+  memcpy(custom_data->data, data, sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)));
+
+  /* step 3: send to queue */
+  if (_queueReciveMsg != NULL)
+  {
+    if (xQueueSend(_queueReciveMsg, &custom_data, 0) != pdPASS)
+    {
+      ESP_LOGE(TAG, "Queue {_queueReciveMsg} send failed");
+      free_mesh_custom_data(custom_data);
+
+      /* clear queue */
+      xQueueReset(_queueReciveMsg);
+    }
+  }
+}
+
+/**
+ * @brief Send a message to another node in the mesh network
+ *
+ * @param addr MAC address of the node to send to
+ * @param data pointer to the data to send
+ * @param len length of the data to send
+ *
+ * Uses the MESH_DATA_P2P protocol to send the data directly to the specified
+ * node. This function is non-blocking and does not return any status.
+ */
+void Mesh::sendMessage(uint8_t *addr, uint8_t *data, uint16_t len)
+{
+  mesh_addr_t to;
+  mesh_data_t payload;
+  payload.data = data;
+  payload.size = len;
+  payload.proto = MESH_PROTO_JSON; // sending from root AP -> Node's STA
+  payload.tos = MESH_TOS_P2P;
+  if (addr != NULL)
+  {
+    memcpy(to.addr, addr, 6);
+  }
+  esp_err_t err = esp_mesh_send(addr ? &to : NULL, &payload, MESH_DATA_P2P, NULL, 0);
+  if (ESP_OK != err)
+  {
+    ESP_LOGE(TAG, "Send with err code %d %s", err, esp_err_to_name(err));
+  }
+}
+
+void Mesh::recieveMsg(void *arg)
+{
+  Mesh *self = static_cast<Mesh *>(arg);
+  mesh_custom_data_t *data;
+
+  while (true)
+  {
+    if (_queueReciveMsg == NULL)
+    {
+      ESP_LOGW(TAG, "Queue recieve msg is null.");
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      continue;
+    }
+    if (xQueueReceive(_queueReciveMsg, &data, portMAX_DELAY) == pdPASS)
+    {
+      try
+      {
+        std::string payload((char *)data->data->data, (int)(data->data->size));
+        ESP_LOGI(TAG, "Mesh Data from: [" MACSTR "] => %s", MAC2STR(data->from->addr), payload.c_str());
+        /* handle message from here */
+      }
+      catch (const std::exception &e)
+      {
+        std::cerr << e.what() << '\n';
+      }
+
+      free_mesh_custom_data(data); // release memory
+    }
+    vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
 
@@ -402,10 +543,20 @@ void Mesh::startBase(void)
     this->_isStartLoopDefault = true;
   }
 
+  if (_queueReciveMsg == nullptr)
+  {
+    _queueReciveMsg = xQueueCreate(10, sizeof(mesh_custom_data_t *));
+  }
+
+  if (_taskRecieveMsg == nullptr)
+  {
+    xTaskCreate(&this->recieveMsg, "recieveMsg", 4 * 1024, this, 5, &_taskRecieveMsg);
+  }
+
   // if (this->_isStartNetIF == false)
   // {
   /*  crete network interfaces for mesh (only station instance saved for further manipulation, soft AP instance ignored */
-  mesh_netifs_init(NULL);
+  mesh_netifs_init(this->callbackData);
   //   this->_isStartNetIF = true;
   // }
 
@@ -418,6 +569,18 @@ void Mesh::deinitBase(void)
   {
     return;
   }
+
+  if (_queueReciveMsg != nullptr)
+  {
+    xQueueReset(_queueReciveMsg);
+  }
+
+  if (_taskRecieveMsg != nullptr)
+  {
+    vTaskDelete(_taskRecieveMsg);
+    _taskRecieveMsg = nullptr;
+  }
+
   ESP_LOGI(TAG, "Deinit base...");
   this->_isStartBase = false;
 }

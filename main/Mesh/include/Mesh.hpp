@@ -49,12 +49,16 @@ private:
   static void init(void *arg);
   static void deinit(void *arg);
   static void handleFactory(void *arg);
+  static void callbackData(mesh_addr_t *from, mesh_data_t *data);
+  static void recieveMsg(void *arg);
+  static void transmitDemo(void *arg);
   void startBase(void);
   void deinitBase(void);
   void initWiFiNative(void);
   void initMeshNative(void);
   void deinitWiFiNative(void);
   void deinitMeshNative(void);
+  void sendMessage(uint8_t *addr, uint8_t *data, uint16_t len);
 
   /* default data */
   bool _isStarted = false;

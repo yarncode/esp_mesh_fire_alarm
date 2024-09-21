@@ -97,7 +97,7 @@ static void receive_task(void *arg)
             ESP_LOGE(TAG, "Received with err code %d %s", err, esp_err_to_name(err));
             continue;
         }
-        if (data.proto == MESH_PROTO_BIN && s_mesh_raw_recv_cb)
+        if (data.proto == MESH_PROTO_JSON && s_mesh_raw_recv_cb)
         {
             s_mesh_raw_recv_cb(&from, &data);
         }
