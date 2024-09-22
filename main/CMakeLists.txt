@@ -12,6 +12,7 @@ set(
   "Bluetooth/Bluetooth.cpp"
   "Refactor/Refactor.cpp"
   "Button/Button.cpp"
+  "Led/Led.cpp"
 )
 
 set(
@@ -27,6 +28,7 @@ set(
   "Bluetooth/include"
   "Refactor/include"
   "Button/include"
+  "Led/include"
 )
 
 idf_component_register(SRCS "main.cpp" ${SOURCE} ${NATIVE_LIBS} INCLUDE_DIRS "." ${HEADERS})

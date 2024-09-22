@@ -2,6 +2,7 @@
 
 #include "Mesh.hpp"
 #include "Mqtt.hpp"
+#include "Led.hpp"
 
 #include <iostream>
 #include <string>
@@ -10,6 +11,9 @@
 
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID_CONFIG "1423492b-2bc3-4761-b2ba-8988573698a9"
+
+using namespace ServicePayload;
+using namespace ServiceType;
 
 static const char *TAG = "Bluetooth";
 
@@ -136,6 +140,9 @@ void Bluetooth::init(void *arg)
 
     // Start advertising
     BLEDevice::startAdvertising();
+
+    /* start led status */
+    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(LedType::EVENT_LED_UPDATE_MODE, LED_LOOP_DUP_SIGNAL));
   }
 
   vTaskDelete(NULL);
@@ -149,6 +156,9 @@ void Bluetooth::deinit(void *arg)
   {
     BLEDevice::stopAdvertising();
     BLEDevice::deinit();
+
+    /* stop led status */
+    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(LedType::EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
   }
 
   vTaskDelete(NULL);

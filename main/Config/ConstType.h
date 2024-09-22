@@ -18,6 +18,7 @@ enum CentralServices
   BLUETOOTH,
   REFACTOR,
   BUTTON,
+  LED,
 };
 
 namespace common

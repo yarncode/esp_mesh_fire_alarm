@@ -43,6 +43,11 @@ namespace ServiceType
   {
     EVENT_BUTTON_CONFIG,
   };
+
+  enum LedType
+  {
+    EVENT_LED_UPDATE_MODE,
+  };
 }
 
 namespace ServicePayload
@@ -56,4 +61,15 @@ namespace ServicePayload
     EventType type;
     std::map<std::string, std::string> data;
   };
+
+  template <typename EventType = nullptr_t, typename DataType = nullptr_t>
+  class RecievePayload_2
+  {
+  public:
+    RecievePayload_2(EventType type, DataType data) : type(type), data(data) {}
+
+    EventType type;
+    DataType data;
+  };
+
 }

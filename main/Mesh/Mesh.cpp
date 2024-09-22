@@ -295,6 +295,17 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
   }
 }
 
+/**
+ * @brief Callback function for mesh data receive
+ *
+ * This function is called when the mesh network receives a data message.
+ * It will copy the received data and send it to the `_queueReciveMsg` queue.
+ *
+ * @param from pointer to a `mesh_addr_t` structure containing the source MAC address
+ * @param data pointer to a `mesh_data_t` structure containing the received data
+ *
+ * This function is non-blocking and does not return any status.
+ */
 void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data)
 {
   /* step 1: malloc mesh_custom_data_t pointer */

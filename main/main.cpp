@@ -10,6 +10,7 @@
 #include "Bluetooth.hpp"
 #include "Refactor.hpp"
 #include "Button.hpp"
+#include "Led.hpp"
 
 extern "C" void app_main(void)
 {
@@ -20,6 +21,7 @@ extern "C" void app_main(void)
     Bluetooth ble;
     Refactor factory;
     Button button;
+    Led led;
 
     /* init storage */
     storage.registerTwoWayObserver(&mesh, CentralServices::MESH);
@@ -31,6 +33,8 @@ extern "C" void app_main(void)
     ble.registerTwoWayObserver(&mesh, CentralServices::MESH);
     ble.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
 
+    button.registerObserver(&led, CentralServices::LED);
+    ble.registerObserver(&led, CentralServices::LED);
     mqtt.registerObserver(&factory, CentralServices::REFACTOR);
 
     factory.registerObserver(&mesh, CentralServices::MESH);
@@ -38,6 +42,7 @@ extern "C" void app_main(void)
 
     storage.start(); // run first storage
     button.start();  // run button
+    led.start();  // run button
 
     /* keep alive main process */
     while (true)
