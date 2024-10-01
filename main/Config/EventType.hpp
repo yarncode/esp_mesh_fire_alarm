@@ -26,6 +26,18 @@ namespace ServiceType
     EVENT_MESH_STOP,
   };
 
+  enum LoggerEventType
+  {
+    EVENT_LOGGER_START,
+    EVENT_LOGGER_STOP,
+  };
+
+  enum MqttEventType
+  {
+    EVENT_MQTT_START,
+    EVENT_MQTT_STOP,
+  };
+
   enum BleEventType
   {
     EVENT_BLE_START,
@@ -48,19 +60,24 @@ namespace ServiceType
   {
     EVENT_LED_UPDATE_MODE,
   };
+
+  enum ApiCallerType
+  {
+    EVENT_API_CALLER_START,
+    EVENT_API_CALLER_STOP,
+    EVENT_API_CALLER_ADD_DEVICE,
+  };
+
+  enum SensorType
+  {
+    SENSOR_START,
+    SENSOR_STOP,
+    SENSOR_SEND_SAMPLE_DATA,
+  };
 }
 
 namespace ServicePayload
 {
-  template <typename EventType = nullptr_t>
-  class RecievePayload
-  {
-  public:
-    RecievePayload(EventType type, std::map<std::string, std::string> data) : type(type), data(data) {}
-
-    EventType type;
-    std::map<std::string, std::string> data;
-  };
 
   template <typename EventType = nullptr_t, typename DataType = nullptr_t>
   class RecievePayload_2

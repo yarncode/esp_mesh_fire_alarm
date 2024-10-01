@@ -5,6 +5,9 @@
 #include <vector>
 #include <map>
 
+using namespace ServicePayload;
+using namespace ServiceType;
+
 static const char *TAG = "Refactor";
 
 void Refactor::runAll(void *arg)
@@ -26,9 +29,9 @@ void Refactor::runAll(void *arg)
 void Refactor::onReceive(CentralServices s, void *data)
 {
   ESP_LOGI(TAG, "Refactor onReceive: %d", s);
-  ServicePayload::RecievePayload<ServiceType::RefactorType> *event = static_cast<ServicePayload::RecievePayload<ServiceType::RefactorType> *>(data);
+  RecievePayload_2<RefactorType, nullptr_t> *event = static_cast<RecievePayload_2<RefactorType, nullptr_t> *>(data);
 
-  if (event->type == ServiceType::RefactorType::REFACTOR_ALL)
+  if (event->type == REFACTOR_ALL)
   {
     xTaskCreate(this->runAll, "runAll", 4 * 1024, this, 5, NULL);
   }

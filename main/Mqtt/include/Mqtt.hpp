@@ -24,6 +24,7 @@ enum ChannelMqtt
   CHANNEL_CONTROL,
   CHANNEL_NOTIFY,
   CHANNEL_CONFIG,
+  CHANNEL_SENSOR,
 };
 
 class Mqtt : public Observer

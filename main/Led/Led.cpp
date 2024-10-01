@@ -139,7 +139,7 @@ void Led::onReceive(CentralServices s, void *data)
   ESP_LOGI(TAG, "Led onReceive: %d", s);
   RecievePayload_2<LedType, led_custume_mode_t> *payload = static_cast<RecievePayload_2<LedType, led_custume_mode_t> *>(data);
 
-  if (payload->type == LedType::EVENT_LED_UPDATE_MODE)
+  if (payload->type == EVENT_LED_UPDATE_MODE)
   {
     this->dispatchLedMode(payload->data);
   }

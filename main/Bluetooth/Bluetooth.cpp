@@ -56,15 +56,17 @@ void Bluetooth::saveWifiAndStartMesh(void *arg)
   std::map<std::string, std::string> payload;
   payload["ssid"] = j["ssid"].get<std::string>();
   payload["password"] = j["password"].get<std::string>();
-
-  /* save info wifi to storage */
-  self->notify(self->_service, CentralServices::STORAGE, new ServicePayload::RecievePayload<ServiceType::StorageEventType>(ServiceType::EVENT_STORAGE_UPDATE_INFO_WIFI, payload));
-
-  /* start mesh service */
-  self->notify(self->_service, CentralServices::MESH, new ServicePayload::RecievePayload<ServiceType::MeshEventType>(ServiceType::EVENT_MESH_START, {}));
+  payload["token"] = j["token"].get<std::string>();
 
   /* stop service bluetooth */
   self->stop();
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+  /* save info wifi to storage */
+  self->notify(self->_service, CentralServices::STORAGE, new RecievePayload_2<StorageEventType, std::map<std::string, std::string>>(EVENT_STORAGE_UPDATE_INFO_WIFI, payload));
+
+  /* start mesh service */
+  self->notify(self->_service, CentralServices::MESH, new RecievePayload_2<MeshEventType, nullptr_t>(ServiceType::EVENT_MESH_START, nullptr));
 
   vTaskDelete(NULL);
 }
@@ -142,7 +144,7 @@ void Bluetooth::init(void *arg)
     BLEDevice::startAdvertising();
 
     /* start led status */
-    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(LedType::EVENT_LED_UPDATE_MODE, LED_LOOP_DUP_SIGNAL));
+    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_LOOP_DUP_SIGNAL));
   }
 
   vTaskDelete(NULL);
@@ -158,7 +160,7 @@ void Bluetooth::deinit(void *arg)
     BLEDevice::deinit();
 
     /* stop led status */
-    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(LedType::EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
+    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
   }
 
   vTaskDelete(NULL);
@@ -169,21 +171,10 @@ void Bluetooth::onReceive(CentralServices s, void *data)
   ESP_LOGI(TAG, "Bluetooth onReceive: %d", s);
   switch (s)
   {
-  case CentralServices::STORAGE:
-  {
-    ServicePayload::RecievePayload<ServiceType::StorageEventType> *payload = static_cast<ServicePayload::RecievePayload<ServiceType::StorageEventType> *>(data);
-    if (payload->type == ServiceType::StorageEventType::EVENT_STORAGE_STARTED)
-    {
-      /* start mesh service */
-      // this->start();
-    }
-    delete payload;
-    break;
-  }
   case CentralServices::BUTTON:
   {
-    ServicePayload::RecievePayload<ServiceType::ButtonType> *payload = static_cast<ServicePayload::RecievePayload<ServiceType::ButtonType> *>(data);
-    if (payload->type == ServiceType::ButtonType::EVENT_BUTTON_CONFIG)
+    RecievePayload_2<ButtonType, nullptr_t> *payload = static_cast<RecievePayload_2<ButtonType, nullptr_t> *>(data);
+    if (payload->type == EVENT_BUTTON_CONFIG)
     {
       if (BLEDevice::getInitialized() == false)
       {

@@ -17,6 +17,9 @@
 #include <map>
 #include <thread>
 
+using namespace ServicePayload;
+using namespace ServiceType;
+
 static const char *TAG = "Storage";
 
 bool Storage::nvsSetString(std::string key, std::string value)
@@ -92,6 +95,7 @@ json Storage::generateDefaultServerConfig(void)
   j["scheme"] = "";
   j["serverIp"] = "";
   j["protocol"] = "";
+  j["mainToken"] = "";
 
   return j;
 }
@@ -175,6 +179,7 @@ bool Storage::loadServerConfig(void)
       cacheManager.scheme = j["scheme"];
       cacheManager.serverIp = j["serverIp"];
       cacheManager.protocol = j["protocol"];
+      cacheManager.mainToken = j["mainToken"];
 
       ESP_LOGI(TAG, "json: %s", j.dump(2).c_str());
 
@@ -218,6 +223,7 @@ std::string Storage::serverConfig(void)
   j["scheme"] = cacheManager.scheme;
   j["serverIp"] = cacheManager.serverIp;
   j["protocol"] = cacheManager.protocol;
+  j["mainToken"] = cacheManager.mainToken;
 
   return j.dump();
 }
@@ -365,10 +371,14 @@ void Storage::init(void *arg)
   }
 
   /* notify all service */
-  for (auto observer : self->observers)
-  {
-    self->notify(self->_service, observer.first, new ServicePayload::RecievePayload<ServiceType::StorageEventType>(ServiceType::StorageEventType::EVENT_STORAGE_STARTED, {}));
-  }
+  // for (auto observer : self->observers)
+  // {
+  //   self->notify(self->_service, observer.first, new ServicePayload::RecievePayload<ServiceType::StorageEventType>(ServiceType::StorageEventType::EVENT_STORAGE_STARTED, {}));
+  // }
+
+  /* start mesh service & log */
+  self->notify(self->_service, CentralServices::MESH, new RecievePayload_2<MeshEventType, nullptr_t>(EVENT_MESH_START, nullptr));
+  self->notify(self->_service, CentralServices::LOG, new RecievePayload_2<LoggerEventType, nullptr_t>(EVENT_LOGGER_START, nullptr));
 
   self->_isStarted = true;
 
@@ -382,17 +392,18 @@ void Storage::onReceive(CentralServices s, void *data)
   {
   case CentralServices::REFACTOR:
   {
-    xTaskCreate(this->handleFactory, "handleFactory", 4 * 1024, this, 10, NULL);
+    xTaskCreate(this->handleFactory, "handleFactory", 4 * 1024, this, 10, NULL); 
     break;
   }
   case CentralServices::BLUETOOTH:
   {
-    ServicePayload::RecievePayload<ServiceType::StorageEventType> *payload = static_cast<ServicePayload::RecievePayload<ServiceType::StorageEventType> *>(data);
+    RecievePayload_2<StorageEventType, std::map<std::string, std::string>> *payload = static_cast<RecievePayload_2<StorageEventType, std::map<std::string, std::string>> *>(data);
 
-    if (payload->type == ServiceType::EVENT_STORAGE_UPDATE_INFO_WIFI)
+    if (payload->type == EVENT_STORAGE_UPDATE_INFO_WIFI)
     {
       cacheManager.ssid = payload->data["ssid"];
       cacheManager.password = payload->data["password"];
+      cacheManager.activeToken = payload->data["token"];
 
       /* save wifi config */
       this->saveWifiConfig();

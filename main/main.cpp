@@ -11,6 +11,8 @@
 #include "Refactor.hpp"
 #include "Button.hpp"
 #include "Led.hpp"
+#include "ApiCaller.hpp"
+#include "Sensor.hpp"
 
 extern "C" void app_main(void)
 {
@@ -22,6 +24,8 @@ extern "C" void app_main(void)
     Refactor factory;
     Button button;
     Led led;
+    ApiCaller api;
+    Sensor sensor;
 
     /* init storage */
     storage.registerTwoWayObserver(&mesh, CentralServices::MESH);
@@ -32,6 +36,9 @@ extern "C" void app_main(void)
     logger.registerObserver(&mesh, CentralServices::MESH);
     ble.registerTwoWayObserver(&mesh, CentralServices::MESH);
     ble.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
+    api.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
+    mesh.registerTwoWayObserver(&api, CentralServices::API_CALLER);
+    mqtt.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
 
     button.registerObserver(&led, CentralServices::LED);
     ble.registerObserver(&led, CentralServices::LED);
@@ -42,7 +49,8 @@ extern "C" void app_main(void)
 
     storage.start(); // run first storage
     button.start();  // run button
-    led.start();  // run button
+    led.start();     // run button
+    sensor.start();  // run sensor
 
     /* keep alive main process */
     while (true)

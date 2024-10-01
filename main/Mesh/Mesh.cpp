@@ -1,10 +1,14 @@
 #include "Mesh.hpp"
+#include "ApiCaller.hpp"
 #include "Cache.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
+
+using namespace ServicePayload;
+using namespace ServiceType;
 
 Mesh *Mesh::_instance = nullptr;
 const uint8_t Mesh::meshId[6] = {0x77, 0x77, 0x77, 0x77, 0x77, 0x76};
@@ -61,6 +65,9 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
 {
   Mesh *self = static_cast<Mesh *>(arg); // get instance
 
+  /* get api instance */
+  ApiCaller *api = static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
+
   ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
   ESP_LOGI(TAG, "<IP_EVENT_STA_GOT_IP>IP:" IPSTR, IP2STR(&event->ip_info.ip));
   self->currentIp.addr = event->ip_info.ip.addr;
@@ -70,8 +77,18 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
   ESP_ERROR_CHECK(esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns));
   mesh_netif_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
 
-  /* start MQTT service */
-  self->notify(self->_service, CentralServices::MQTT, new ServicePayload::RecievePayload<ServiceType::MeshEventType>(ServiceType::MeshEventType::EVENT_MESH_START, {}));
+  if (cacheManager.activeToken.length() > 0)
+  {
+    /* add device to server */
+    self->notify(self->_service, CentralServices::API_CALLER, new RecievePayload_2<ApiCallerType, nullptr_t>(ApiCallerType::EVENT_API_CALLER_ADD_DEVICE, nullptr));
+  }
+
+  /* ignore if state api is creating device */
+  if (api->isCallingCreateDevice() == false)
+  {
+    /* start MQTT service */
+    self->notify(self->_service, CentralServices::MQTT, new RecievePayload_2<MqttEventType, nullptr_t>(MqttEventType::EVENT_MQTT_START, nullptr));
+  }
 }
 
 void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
@@ -152,10 +169,10 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     mesh_netifs_start(esp_mesh_is_root());
 
     /* start task sending demo */
-    if (esp_mesh_is_root() == false)
-    {
-      xTaskCreate(Mesh::transmitDemo, "transmitDemo", 4 * 1024, self, 8, &_taskTxDemo);
-    }
+    // if (esp_mesh_is_root() == false)
+    // {
+    //   xTaskCreate(Mesh::transmitDemo, "transmitDemo", 4 * 1024, self, 8, &_taskTxDemo);
+    // }
     break;
   }
   case MESH_EVENT_PARENT_DISCONNECTED:
@@ -169,11 +186,11 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     mesh_netifs_stop(false);
 
     /* clear task sending demo */
-    if (_taskTxDemo != nullptr)
-    {
-      vTaskDelete(_taskTxDemo);
-      _taskTxDemo = nullptr;
-    }
+    // if (_taskTxDemo != nullptr)
+    // {
+    //   vTaskDelete(_taskTxDemo);
+    //   _taskTxDemo = nullptr;
+    // }
     break;
   }
   case MESH_EVENT_LAYER_CHANGE:
@@ -639,18 +656,6 @@ void Mesh::onReceive(CentralServices s, void *data)
   std::cout << "Mesh onReceive from " << s << std::endl;
   switch (s)
   {
-  case CentralServices::STORAGE:
-  {
-    ServicePayload::RecievePayload<ServiceType::StorageEventType> *payload = static_cast<ServicePayload::RecievePayload<ServiceType::StorageEventType> *>(data);
-    if (payload->type == ServiceType::StorageEventType::EVENT_STORAGE_STARTED)
-    {
-      /* start mesh service */
-      this->start();
-    }
-    delete payload;
-    break;
-  }
-
   case CentralServices::REFACTOR:
   {
     xTaskCreate(this->handleFactory, "handleFactory", 4 * 1024, this, 10, NULL);
@@ -659,11 +664,30 @@ void Mesh::onReceive(CentralServices s, void *data)
 
   case CentralServices::BLUETOOTH:
   {
-    ServicePayload::RecievePayload<ServiceType::MeshEventType> *payload = static_cast<ServicePayload::RecievePayload<ServiceType::MeshEventType> *>(data);
+    RecievePayload_2<MeshEventType, nullptr_t> *payload = static_cast<RecievePayload_2<MeshEventType, nullptr_t> *>(data);
 
-    if (payload->type == ServiceType::EVENT_MESH_START)
+    if (payload->type == EVENT_MESH_START)
     {
       ESP_LOGI(TAG, "BLUETOOTH request Mesh started.");
+      if (this->_isStarted == false)
+      {
+        /* call func update router config */
+
+        /* and then start service mesh again */
+        this->start();
+      }
+    }
+    delete payload;
+    break;
+  }
+
+  case CentralServices::STORAGE:
+  {
+    RecievePayload_2<MeshEventType, nullptr_t> *payload = static_cast<RecievePayload_2<MeshEventType, nullptr_t> *>(data);
+
+    if (payload->type == EVENT_MESH_START)
+    {
+      ESP_LOGI(TAG, "STORAGE request Mesh started.");
       if (this->_isStarted == false)
       {
         /* call func update router config */

@@ -34,7 +34,7 @@ std::string macToString(const uint8_t mac[6])
   {
     if (i != 0)
     {
-      oss << "_"; // Thêm dấu _ giữa các byte
+      oss << ":"; // Thêm dấu _ giữa các byte
     }
     // Định dạng từng byte dưới dạng hai chữ số hexa
     oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(mac[i]);
@@ -343,6 +343,13 @@ namespace helperString
 
 namespace chipInfo
 {
+
+  std::string getMacDevice(void)
+  {
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    return macToString(mac);
+  }
 
   uint16_t getChipRevision(void)
   {

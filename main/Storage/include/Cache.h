@@ -17,6 +17,8 @@ public:
   {
   }
   /* wifi config */
+  std::string activeToken;
+  std::string mainToken;
   std::string ssid;
   std::string password;
   std::string ip;

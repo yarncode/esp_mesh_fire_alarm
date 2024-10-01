@@ -6,6 +6,9 @@
 #include <vector>
 #include <map>
 
+using namespace ServicePayload;
+using namespace ServiceType;
+
 static const char *TAG = "Log";
 
 void Log::start(void)
@@ -50,8 +53,8 @@ void Log::onReceive(CentralServices s, void *data)
   {
   case CentralServices::STORAGE:
   {
-    ServicePayload::RecievePayload<ServiceType::StorageEventType> *payload = static_cast<ServicePayload::RecievePayload<ServiceType::StorageEventType> *>(data);
-    if (payload->type == ServiceType::StorageEventType::EVENT_STORAGE_STARTED)
+    RecievePayload_2<LoggerEventType, nullptr_t> *payload = static_cast<RecievePayload_2<LoggerEventType, nullptr_t> *>(data);
+    if (payload->type == EVENT_LOGGER_START)
     {
       /* start log service */
       this->start();

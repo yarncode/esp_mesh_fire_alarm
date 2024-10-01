@@ -13,6 +13,8 @@ set(
   "Refactor/Refactor.cpp"
   "Button/Button.cpp"
   "Led/Led.cpp"
+  "ApiCaller/ApiCaller.cpp"
+  "Sensor/Sensor.cpp"
 )
 
 set(
@@ -29,6 +31,8 @@ set(
   "Refactor/include"
   "Button/include"
   "Led/include"
+  "ApiCaller/include"
+  "Sensor/include"
 )
 
 idf_component_register(SRCS "main.cpp" ${SOURCE} ${NATIVE_LIBS} INCLUDE_DIRS "." ${HEADERS})

@@ -47,7 +47,7 @@ void Button::handleFNMode(uint8_t mode)
     case FNMode::FN_CONFIG:
     {
       ESP_LOGI(TAG, "FN_CONFIG");
-      this->notify(this->_service, CentralServices::BLUETOOTH, new ServicePayload::RecievePayload<ServiceType::ButtonType>(ServiceType::EVENT_BUTTON_CONFIG, {}));
+      this->notify(this->_service, CentralServices::BLUETOOTH, new RecievePayload_2<ButtonType, nullptr_t>(ServiceType::EVENT_BUTTON_CONFIG, nullptr));
       break;
     }
     default:
@@ -83,7 +83,7 @@ void Button::init(void *arg)
           if (mode != 0)
           {
             /* turn off led */
-            self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(LedType::EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
+            self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
             mode = 0;
           }
         }
@@ -93,12 +93,12 @@ void Button::init(void *arg)
           mode++;
           if (_led_mode.contains(mode))
           {
-            self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(LedType::EVENT_LED_UPDATE_MODE, _led_mode.at(mode)));
+            self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, _led_mode.at(mode)));
           }
           else
           {
             /* turn off led because outside of mode select */
-            self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(LedType::EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
+            self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
           }
         }
       }

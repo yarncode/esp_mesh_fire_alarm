@@ -1,10 +1,16 @@
 #include "Mqtt.hpp"
 #include "Helper.hpp"
+#include "Cache.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
+
+#define BIT_STOP (1 << 0)
+
+using namespace ServicePayload;
+using namespace ServiceType;
 
 static const char *TAG = "Mqtt";
 
@@ -12,6 +18,7 @@ static TaskHandle_t _taskRecieveMsg = nullptr;
 static TaskHandle_t _taskSendMsg = nullptr;
 static QueueHandle_t _queueReciveMsg = nullptr;
 static QueueHandle_t _queueSendMsg = nullptr;
+static EventGroupHandle_t _eventGroupStop = nullptr;
 
 static esp_mqtt_client_handle_t _gb_client = nullptr;
 static esp_mqtt_event_id_t _gb_state_mqtt = MQTT_EVENT_DISCONNECTED;
@@ -20,7 +27,8 @@ static std::map<ChannelMqtt, std::string> _gb_channel_topic = {
     {ChannelMqtt::CHANNEL_CONFIG, "/config"},
     {ChannelMqtt::CHANNEL_DATA, "/data"},
     {ChannelMqtt::CHANNEL_CONTROL, "/control"},
-    {ChannelMqtt::CHANNEL_NOTIFY, "/notify"}};
+    {ChannelMqtt::CHANNEL_NOTIFY, "/notify"},
+    {ChannelMqtt::CHANNEL_SENSOR, "/sensor"}};
 
 void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -106,7 +114,7 @@ void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t
 
 int Mqtt::sendMessage(ChannelMqtt chanel, std::string msg)
 {
-  ESP_LOGI(TAG, "Send message...");
+  ESP_LOGI(TAG, "Send message at topic: \"%s\"", _gb_channel_topic[chanel].c_str());
   if (_gb_client != nullptr && _gb_state_mqtt == MQTT_EVENT_CONNECTED)
   {
     return esp_mqtt_client_publish(_gb_client, _gb_channel_topic[chanel].c_str(), msg.c_str(), 0, 1, 0);
@@ -168,19 +176,32 @@ void Mqtt::start(void)
 
 void Mqtt::stop(void)
 {
-  if(!this->_isStarted){
+  if (!this->_isStarted)
+  {
     ESP_LOGW(TAG, "Mqtt is stopped");
     return;
   }
+
+  _eventGroupStop = (_eventGroupStop == nullptr) ? xEventGroupCreate() : _eventGroupStop;
+
   ESP_LOGI(TAG, "Mqtt stop");
   xTaskCreate(&Mqtt::deinit, "deinit::Mqtt", 4 * 1024, this, 6, NULL);
+
+  /* wait task done */
+  xEventGroupWaitBits(_eventGroupStop, BIT_STOP, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000)); // just 5s
 }
 
 void Mqtt::init(void *arg)
 {
   Mqtt *self = static_cast<Mqtt *>(arg);
 
-  std::string url = "mqtt://192.168.1.2:1883";
+  if (cacheManager.m_username.length() == 0 || cacheManager.m_password.length() == 0)
+  {
+    ESP_LOGE(TAG, "Username or password is empty.");
+    vTaskDelete(NULL);
+  }
+
+  std::string url = std::string("mqtt://") + std::string(CONFIG_HOST_SERVER) + std::string(":") + std::to_string(CONFIG_HOST_MQTT_PORT);
   std::string clientId = helperString::genClientId();
 
   esp_mqtt_client_config_t mqtt_cfg = {
@@ -189,9 +210,9 @@ void Mqtt::init(void *arg)
               .uri = url.c_str(),
           },
       },
-      .credentials{
-          .client_id = clientId.c_str(),
-      },
+      .credentials{.username = cacheManager.m_username.c_str(), .client_id = clientId.c_str(), .authentication = {
+                                                                                                   .password = cacheManager.m_password.c_str(),
+                                                                                               }},
       .task{
           .priority = 5,
           .stack_size = 8 * 1024,
@@ -258,6 +279,12 @@ void Mqtt::deinit(void *arg)
     _gb_state_mqtt = MQTT_EVENT_DISCONNECTED;
   }
 
+  /* notify event stop */
+  if (_eventGroupStop)
+  {
+    xEventGroupSetBits(_eventGroupStop, BIT_STOP);
+  }
+
   self->_isStarted = false;
   vTaskDelete(NULL);
 }
@@ -265,22 +292,42 @@ void Mqtt::deinit(void *arg)
 void Mqtt::onReceive(CentralServices s, void *data)
 {
   ESP_LOGI(TAG, "Mqtt onRecive from %d", s);
-  ServicePayload::RecievePayload<ServiceType::StorageEventType> *payload = static_cast<ServicePayload::RecievePayload<ServiceType::StorageEventType> *>(data);
   switch (s)
   {
   case CentralServices::MESH:
   {
-    if (payload->type == ServiceType::MeshEventType::EVENT_MESH_START)
+    RecievePayload_2<MqttEventType, nullptr_t> *payload = static_cast<RecievePayload_2<MqttEventType, nullptr_t> *>(data);
+    if (payload->type == MqttEventType::EVENT_MQTT_START)
     {
       /* start mesh service */
       this->start();
     }
+    delete payload;
+    break;
+  }
+  case CentralServices::API_CALLER:
+  {
+    RecievePayload_2<MqttEventType, nullptr_t> *payload = static_cast<RecievePayload_2<MqttEventType, nullptr_t> *>(data);
+    if (payload->type == MqttEventType::EVENT_MQTT_START)
+    {
+      /* start mesh service */
+      this->start();
+    }
+    delete payload;
+    break;
+  }
+  case CentralServices::SENSOR:
+  {
+    RecievePayload_2<SensorType, std::string> *payload = static_cast<RecievePayload_2<SensorType, std::string> *>(data);
+    if (payload->type == SENSOR_SEND_SAMPLE_DATA)
+    {
+      this->sendMessage(ChannelMqtt::CHANNEL_SENSOR, payload->data);
+    }
+    delete payload;
     break;
   }
 
   default:
     break;
   }
-
-  delete payload;
 }
