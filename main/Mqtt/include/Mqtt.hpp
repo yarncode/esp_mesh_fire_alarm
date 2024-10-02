@@ -25,6 +25,7 @@ enum ChannelMqtt
   CHANNEL_NOTIFY,
   CHANNEL_CONFIG,
   CHANNEL_SENSOR,
+  CHANNEL_ACTIVE,
 };
 
 class Mqtt : public Observer
@@ -41,8 +42,11 @@ public:
   int sendMessage(ChannelMqtt chanel, std::string msg);
 
 private:
+  void onConnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
+  void onDisconnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
   static void init(void *arg);
   static void deinit(void *arg);
+  static void notifyDeviceCreated(void *arg);
   static void recieveMsg(void *arg);
   static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 

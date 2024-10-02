@@ -351,6 +351,13 @@ namespace chipInfo
     return macToString(mac);
   }
 
+  std::string getMacBleDevice(void)
+  {
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
+    return macToString(mac);
+  }
+
   uint16_t getChipRevision(void)
   {
     esp_chip_info_t chip_info;

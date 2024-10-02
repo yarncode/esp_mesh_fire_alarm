@@ -74,6 +74,13 @@ namespace ServiceType
     SENSOR_STOP,
     SENSOR_SEND_SAMPLE_DATA,
   };
+
+  enum SNTPType
+  {
+    SNTP_START,
+    SNTP_STOP,
+    SNTP_RESTART,
+  };
 }
 
 namespace ServicePayload

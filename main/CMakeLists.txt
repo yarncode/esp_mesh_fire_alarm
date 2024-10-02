@@ -15,6 +15,7 @@ set(
   "Led/Led.cpp"
   "ApiCaller/ApiCaller.cpp"
   "Sensor/Sensor.cpp"
+  "SNTP/SNTP.cpp"
 )
 
 set(
@@ -33,6 +34,7 @@ set(
   "Led/include"
   "ApiCaller/include"
   "Sensor/include"
+  "SNTP/include"
 )
 
 idf_component_register(SRCS "main.cpp" ${SOURCE} ${NATIVE_LIBS} INCLUDE_DIRS "." ${HEADERS})

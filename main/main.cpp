@@ -13,6 +13,7 @@
 #include "Led.hpp"
 #include "ApiCaller.hpp"
 #include "Sensor.hpp"
+#include "SNTP.hpp"
 
 extern "C" void app_main(void)
 {
@@ -26,6 +27,7 @@ extern "C" void app_main(void)
     Led led;
     ApiCaller api;
     Sensor sensor;
+    Sntp sntp;
 
     /* init storage */
     storage.registerTwoWayObserver(&mesh, CentralServices::MESH);
@@ -38,6 +40,7 @@ extern "C" void app_main(void)
     ble.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
     api.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
     mesh.registerTwoWayObserver(&api, CentralServices::API_CALLER);
+    mesh.registerTwoWayObserver(&sntp, CentralServices::SNTP);
     mqtt.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
 
     button.registerObserver(&led, CentralServices::LED);

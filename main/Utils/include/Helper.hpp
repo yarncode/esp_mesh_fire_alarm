@@ -55,6 +55,7 @@ namespace chipInfo {
   } sketchSize_t;
 
   std::string getMacDevice(void);
+  std::string getMacBleDevice(void);
   uint8_t getChipCores(void);
   std::string getChipModel(void);
   uint32_t getSketchSize(sketchSize_t response);

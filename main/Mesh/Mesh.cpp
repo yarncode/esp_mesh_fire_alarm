@@ -1,6 +1,9 @@
 #include "Mesh.hpp"
 #include "ApiCaller.hpp"
+#include "SNTP.hpp"
 #include "Cache.h"
+#include "Helper.hpp"
+#include "Storage.hpp"
 
 #include <iostream>
 #include <string>
@@ -67,6 +70,7 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
 
   /* get api instance */
   ApiCaller *api = static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
+  Sntp *sntp = static_cast<Sntp *>(self->getObserver(CentralServices::SNTP));
 
   ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
   ESP_LOGI(TAG, "<IP_EVENT_STA_GOT_IP>IP:" IPSTR, IP2STR(&event->ip_info.ip));
@@ -77,17 +81,37 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
   ESP_ERROR_CHECK(esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns));
   mesh_netif_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
 
-  if (cacheManager.activeToken.length() > 0)
-  {
-    /* add device to server */
-    self->notify(self->_service, CentralServices::API_CALLER, new RecievePayload_2<ApiCallerType, nullptr_t>(ApiCallerType::EVENT_API_CALLER_ADD_DEVICE, nullptr));
-  }
+  cacheManager.ip = ip4ToString(event->ip_info.ip);
+  cacheManager.netmask = ip4ToString(event->ip_info.netmask);
+  cacheManager.gateway = ip4ToString(event->ip_info.gw);
+
+  /* save wifi config */
+  Storage storage;
+  storage.saveWifiConfig();
 
   /* ignore if state api is creating device */
   if (api->isCallingCreateDevice() == false)
   {
     /* start MQTT service */
     self->notify(self->_service, CentralServices::MQTT, new RecievePayload_2<MqttEventType, nullptr_t>(MqttEventType::EVENT_MQTT_START, nullptr));
+  }
+
+  if (cacheManager.activeToken.length() > 0)
+  {
+    /* add device to server */
+    self->notify(self->_service, CentralServices::API_CALLER, new RecievePayload_2<ApiCallerType, nullptr_t>(ApiCallerType::EVENT_API_CALLER_ADD_DEVICE, nullptr));
+  }
+
+  /* start SNTP service */
+  if (sntp->sntpState() == false)
+  {
+    /* start service time if not running */
+    sntp->start();
+  }
+  else
+  {
+    /* just restart service */
+    sntp->restart();
   }
 }
 

@@ -51,22 +51,29 @@ void Bluetooth::saveWifiAndStartMesh(void *arg)
 {
   Bluetooth *self = static_cast<Bluetooth *>(arg);
 
-  json j = json::parse(self->_rawData.c_str());
+  try
+  {
+    json j = json::parse(self->_rawData.c_str());
 
-  std::map<std::string, std::string> payload;
-  payload["ssid"] = j["ssid"].get<std::string>();
-  payload["password"] = j["password"].get<std::string>();
-  payload["token"] = j["token"].get<std::string>();
+    std::map<std::string, std::string> payload;
+    payload["ssid"] = j["ssid"].get<std::string>();
+    payload["password"] = j["password"].get<std::string>();
+    payload["token"] = j["token"].get<std::string>();
 
-  /* stop service bluetooth */
-  self->stop();
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
+    /* save info wifi to storage */
+    self->notify(self->_service, CentralServices::STORAGE, new RecievePayload_2<StorageEventType, std::map<std::string, std::string>>(EVENT_STORAGE_UPDATE_INFO_WIFI, payload));
+    
+    /* stop service bluetooth */
+    self->stop();
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
 
-  /* save info wifi to storage */
-  self->notify(self->_service, CentralServices::STORAGE, new RecievePayload_2<StorageEventType, std::map<std::string, std::string>>(EVENT_STORAGE_UPDATE_INFO_WIFI, payload));
-
-  /* start mesh service */
-  self->notify(self->_service, CentralServices::MESH, new RecievePayload_2<MeshEventType, nullptr_t>(ServiceType::EVENT_MESH_START, nullptr));
+    /* start mesh service */
+    self->notify(self->_service, CentralServices::MESH, new RecievePayload_2<MeshEventType, nullptr_t>(ServiceType::EVENT_MESH_START, nullptr));
+  }
+  catch (const std::exception &e)
+  {
+    std::cerr << e.what() << '\n';
+  }
 
   vTaskDelete(NULL);
 }

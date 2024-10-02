@@ -1,16 +1,20 @@
 #include "Mqtt.hpp"
 #include "Helper.hpp"
+#include "ApiCaller.hpp"
 #include "Cache.h"
 
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
+#include <nlohmann/json.hpp>
 
 #define BIT_STOP (1 << 0)
 
 using namespace ServicePayload;
 using namespace ServiceType;
+using namespace nlohmann;
 
 static const char *TAG = "Mqtt";
 
@@ -28,7 +32,46 @@ static std::map<ChannelMqtt, std::string> _gb_channel_topic = {
     {ChannelMqtt::CHANNEL_DATA, "/data"},
     {ChannelMqtt::CHANNEL_CONTROL, "/control"},
     {ChannelMqtt::CHANNEL_NOTIFY, "/notify"},
-    {ChannelMqtt::CHANNEL_SENSOR, "/sensor"}};
+    {ChannelMqtt::CHANNEL_SENSOR, "/sensor"},
+    {ChannelMqtt::CHANNEL_ACTIVE, "/active"},
+};
+
+void Mqtt::notifyDeviceCreated(void *arg)
+{
+  Mqtt *self = static_cast<Mqtt *>(arg);
+  json body;
+
+  body["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
+  body["mac"] = chipInfo::getMacBleDevice();
+  body["ip"] = cacheManager.ip;
+  body["netmask"] = cacheManager.netmask;
+  body["gateway"] = cacheManager.gateway;
+  body["ssid"] = cacheManager.ssid;
+  body["password"] = cacheManager.password;
+
+  self->sendMessage(ChannelMqtt::CHANNEL_ACTIVE, body.dump());
+
+  vTaskDelete(NULL);
+}
+
+void Mqtt::onConnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
+{
+  ESP_LOGI(TAG, "Mqtt Connected");
+  Mqtt *self = static_cast<Mqtt *>(handler_args);
+
+  /* check whether "api create device" is call recently */
+  ApiCaller *api = static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
+  if (api->getCacheApiCallRecently() == true)
+  {
+    xTaskCreate(&Mqtt::notifyDeviceCreated, "notifyDeviceCreated", 4 * 1024, self, 5, NULL);
+    api->setCacheApiCallRecently(false);
+  }
+}
+
+void Mqtt::onDisconnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
+{
+  ESP_LOGE(TAG, "Mqtt Disconnected");
+}
 
 void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -45,16 +88,18 @@ void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t
   {
   case MQTT_EVENT_CONNECTED:
   {
-    ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+    // ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
     self->_isConnected = true;
     _gb_state_mqtt = MQTT_EVENT_CONNECTED;
+    self->onConnected(self, base, event_id, event_data);
     break;
   }
   case MQTT_EVENT_DISCONNECTED:
   {
-    ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+    // ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
     self->_isConnected = false;
     _gb_state_mqtt = MQTT_EVENT_DISCONNECTED;
+    self->onDisconnected(self, base, event_id, event_data);
     break;
   }
   case MQTT_EVENT_SUBSCRIBED:
@@ -114,9 +159,9 @@ void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t
 
 int Mqtt::sendMessage(ChannelMqtt chanel, std::string msg)
 {
-  ESP_LOGI(TAG, "Send message at topic: \"%s\"", _gb_channel_topic[chanel].c_str());
   if (_gb_client != nullptr && _gb_state_mqtt == MQTT_EVENT_CONNECTED)
   {
+    ESP_LOGI(TAG, "Send message at topic: \"%s\"", _gb_channel_topic[chanel].c_str());
     return esp_mqtt_client_publish(_gb_client, _gb_channel_topic[chanel].c_str(), msg.c_str(), 0, 1, 0);
   }
   return -1;

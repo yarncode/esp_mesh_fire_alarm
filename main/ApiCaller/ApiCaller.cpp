@@ -90,7 +90,17 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 
 bool ApiCaller::isCallingCreateDevice(void)
 {
-  return this->_state_create_device;
+  return cacheManager.activeToken.length() > 0 ? true : false;
+}
+
+bool ApiCaller::getCacheApiCallRecently(void)
+{
+  return this->_cache_api_call_recently;
+}
+
+void ApiCaller::setCacheApiCallRecently(bool value)
+{
+  this->_cache_api_call_recently = value;
 }
 
 void ApiCaller::addDevice(void *arg)
@@ -104,7 +114,6 @@ void ApiCaller::addDevice(void *arg)
     return;
   }
 
-  self->_state_create_device = true; // set flag create device
 
   char payload_response[512];
   memset(payload_response, 0, sizeof(payload_response));
@@ -160,6 +169,8 @@ void ApiCaller::addDevice(void *arg)
         {
           ESP_LOGI(TAG, "Save server config success");
         }
+
+        self->setCacheApiCallRecently(true);
       }
 
       /* Start MQTT connection with new config */
@@ -173,7 +184,6 @@ void ApiCaller::addDevice(void *arg)
 
   /* reset token active */
   cacheManager.activeToken = "";
-  self->_state_create_device = false; // set flag create device
   esp_http_client_cleanup(client);
 
   vTaskDelete(NULL);
