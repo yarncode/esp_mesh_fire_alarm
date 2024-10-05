@@ -28,9 +28,9 @@ void Sensor::sampleValue(void *arg)
     /* get random */
     random = esp_random();
     /* get temperature from random */
-    temperature = random / 100.0f;
+    temperature = random % 100;
     /* get humidity from random */
-    humidity = random / 100.0f;
+    humidity = random % 150;
     /* get smoke value from random 100pmm -> 1000pmm */
     smoke = esp_random() % 1000;
 
