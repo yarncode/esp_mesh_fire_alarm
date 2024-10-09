@@ -1,5 +1,7 @@
 #include "Sensor.hpp"
 
+#include "MQSensor.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -15,28 +17,34 @@ using namespace ServicePayload;
 static const char *TAG = "Sensor";
 static TaskHandle_t _taskSampleValue = NULL;
 
+MQUnifiedsensor MQ2("ESP32", 5, 12, GPIO_NUM_34, "MQ-2");
+
 void Sensor::sampleValue(void *arg)
 {
   Sensor *self = static_cast<Sensor *>(arg);
   uint8_t random;
-  float temperature, humidity;
-  uint16_t smoke;
-  json body;
+  double temperature, humidity, smoke;
+  json body = json::object();
 
   while (true)
   {
+    /* update data sensor MQ2 */
+    MQ2.update();
+
     /* get random */
     random = esp_random();
     /* get temperature from random */
     temperature = random % 100;
     /* get humidity from random */
     humidity = random % 150;
-    /* get smoke value from random 100pmm -> 1000pmm */
-    smoke = esp_random() % 1000;
+    /* get smoke from data */
+    smoke = MQ2.readSensor();
 
-    body["temperature"] = temperature;
-    body["humidity"] = humidity;
+    // body["temperature"] = temperature;
+    // body["humidity"] = humidity;
     body["smoke"] = smoke;
+
+    ESP_LOGI(TAG, "Sensor sampleValue: %s", body.dump(2).c_str());
 
     self->notify(self->_service, CentralServices::MQTT, new RecievePayload_2<SensorType, std::string>(SENSOR_SEND_SAMPLE_DATA, body.dump()));
 
@@ -62,6 +70,24 @@ void Sensor::stop(void)
 void Sensor::init(void *arg)
 {
   Sensor *self = static_cast<Sensor *>(arg);
+
+  MQ2.setRegressionMethod(1); //_PPM =  a*ratio^b
+  /* Configure the equation to to calculate LPG concentration */
+  MQ2.setA(987.99);
+  MQ2.setB(-2.162);
+  MQ2.setRL(1);
+  MQ2.init();
+
+  /* Start calibrate */
+  ESP_LOGI(TAG, "Calibrate R0");
+  float calcR0 = 0;
+  for (int i = 1; i <= 10; i++)
+  {
+    MQ2.update(); // Update data, the arduino will read the voltage from the analog pin
+    calcR0 += MQ2.calibrate(9.83);
+  }
+  MQ2.setR0(calcR0 / 10);
+  ESP_LOGI(TAG, "Calibrate done.");
 
   ESP_LOGI(TAG, "Sensor init");
   xTaskCreate(&Sensor::sampleValue, "Sensor::sampleValue", 4 * 1024, self, 5, &_taskSampleValue);

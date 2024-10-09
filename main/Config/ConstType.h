@@ -22,6 +22,7 @@ enum CentralServices
   API_CALLER,
   SENSOR,
   SNTP,
+  LCD,
 };
 
 namespace common

@@ -14,6 +14,7 @@
 #include "ApiCaller.hpp"
 #include "Sensor.hpp"
 #include "SNTP.hpp"
+#include "Screen.hpp"
 
 extern "C" void app_main(void)
 {
@@ -28,6 +29,7 @@ extern "C" void app_main(void)
     ApiCaller api;
     Sensor sensor;
     Sntp sntp;
+    LCDScreen screen;
 
     /* init storage */
     storage.registerTwoWayObserver(&mesh, CentralServices::MESH);
@@ -54,6 +56,7 @@ extern "C" void app_main(void)
     button.start();  // run button
     led.start();     // run button
     sensor.start();  // run sensor
+    screen.start();    // run lcd 
 
     /* keep alive main process */
     while (true)

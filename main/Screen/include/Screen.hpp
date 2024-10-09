@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Arduino.h"
-
 #include <iostream>
 #include <string>
 #include <vector>
@@ -10,19 +8,18 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-#include "esp_random.h"
 #include "driver/gpio.h"
 
 #include "Observer.h"
 #include "ConstType.h"
 #include "EventType.hpp"
 
-class Sensor : public Observer
+class LCDScreen : public Observer
 {
 public:
-  Sensor()
+  LCDScreen()
   {
-    this->_service = CentralServices::SENSOR;
+    this->_service = CentralServices::NONE;
   };
   void onReceive(CentralServices s, void *data) override;
   void start(void);
@@ -30,6 +27,5 @@ public:
 
 private:
   static void init(void *arg);
-  static void sampleValue(void *arg);
   static void deinit(void *arg);
 };
