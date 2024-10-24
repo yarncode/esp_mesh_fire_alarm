@@ -61,14 +61,14 @@ void Button::init(void *arg)
   Button *self = static_cast<Button *>(arg);
 
   button_event_t ev;
-  QueueHandle_t button_events = button_init(PIN_BIT(GPIO_NUM_0));
+  QueueHandle_t button_events = button_init(PIN_BIT(GPIO_NUM_4));
   uint8_t mode = 0;
 
   while (true)
   {
     if (xQueueReceive(button_events, &ev, 1000 / portTICK_PERIOD_MS))
     {
-      if (ev.pin == GPIO_NUM_0)
+      if (ev.pin == GPIO_NUM_4)
       {
         if (ev.event == BUTTON_DOWN)
         {

@@ -40,8 +40,8 @@ void Sensor::sampleValue(void *arg)
     /* get smoke from data */
     smoke = MQ2.readSensor();
 
-    // body["temperature"] = temperature;
-    // body["humidity"] = humidity;
+    body["temperature"] = temperature;
+    body["humidity"] = humidity;
     body["smoke"] = smoke;
 
     ESP_LOGI(TAG, "Sensor sampleValue: %s", body.dump(2).c_str());

@@ -25,7 +25,7 @@ void LCDScreen::init(void *arg)
   LCDScreen *self = static_cast<LCDScreen *>(arg);
 
   /*  LCD initialization */
-  LCD_init(0x27, GPIO_NUM_22, GPIO_NUM_21, 20, 4);
+  LCD_init(0x27, GPIO_NUM_21, GPIO_NUM_22, 20, 4);
   LCD_home();
   LCD_clearScreen();
   LCD_writeStr("----- 20x4 LCD -----");
