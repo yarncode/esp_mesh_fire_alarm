@@ -80,6 +80,13 @@ json Storage::generateDefaultWifiConfig(void)
   j["bssid_set"] = false;
   j["history_station_connected"] = false;
 
+  cacheManager.ssid = "";
+  cacheManager.password = "";
+  std::vector<uint8_t> bssid_v{0, 0, 0, 0, 0, 0};
+  std::copy(bssid_v.begin(), bssid_v.end(), cacheManager.sta_bssid);
+  cacheManager.bssid_set = false;
+  cacheManager.history_station_connected = false;
+
   return j;
 }
 
@@ -96,6 +103,30 @@ json Storage::generateDefaultServerConfig(void)
   j["serverIp"] = "";
   j["protocol"] = "";
   j["mainToken"] = "";
+  
+  cacheManager.serverHost = "";
+  cacheManager.serverPort = (int)0;
+  cacheManager.m_username = "";
+  cacheManager.m_password = "";
+  cacheManager.scheme = "";
+  cacheManager.serverIp = "";
+  cacheManager.protocol = "";
+  cacheManager.mainToken = "";
+
+  return j;
+}
+
+json Storage::generateDefaultThresholdsConfig(void)
+{
+  json j;
+
+  j["temp"] = common::CONFIG_THRESHOLD_TEMP;
+  j["humi"] = common::CONFIG_THRESHOLD_HUMI;
+  j["smoke"] = common::CONFIG_THRESHOLD_SMOKE;
+
+  cacheManager.thresholds_temp = common::CONFIG_THRESHOLD_TEMP;
+  cacheManager.thresholds_humi = common::CONFIG_THRESHOLD_HUMI;
+  cacheManager.thresholds_smoke = common::CONFIG_THRESHOLD_SMOKE;
 
   return j;
 }
@@ -228,6 +259,23 @@ std::string Storage::serverConfig(void)
   return j.dump();
 }
 
+std::string Storage::thresholdTriggerConfig(void)
+{
+  json j;
+
+  j["temp"] = cacheManager.thresholds_temp;
+  j["humi"] = cacheManager.thresholds_humi;
+  j["smoke"] = cacheManager.thresholds_smoke;
+
+  return j.dump();
+}
+
+bool Storage::saveThresholdTriggerConfig(void)
+{
+  std::string data = this->thresholdTriggerConfig();
+  return this->writeFile(common::CONFIG_PATH_FILE_THRESHOLD_CONFIG, data);
+}
+
 bool Storage::saveServerConfig(void)
 {
   std::string data = this->serverConfig();
@@ -301,6 +349,46 @@ bool Storage::loadWifiConfig(void)
   return false;
 }
 
+bool Storage::loadThresholdTriggerConfig(void)
+{
+  std::string data = this->readFile(common::CONFIG_PATH_FILE_THRESHOLD_CONFIG);
+  if (data.length() > 0)
+  {
+    try
+    {
+      json j = json::parse(data);
+
+      std::vector<int> temp = j["temp"];
+      std::vector<int> humi = j["humi"];
+      std::vector<int> smoke = j["smoke"];
+
+      cacheManager.thresholds_temp = temp;
+      cacheManager.thresholds_humi = humi;
+      cacheManager.thresholds_smoke = smoke;
+
+      ESP_LOGI(TAG, "json: %s", j.dump(2).c_str());
+
+      return true;
+    }
+    catch (const std::exception &e)
+    {
+      std::cerr << e.what() << '\n';
+    }
+  }
+  else
+  {
+    /* init config default */
+    std::string config_default = this->generateDefaultThresholdsConfig().dump();
+    bool flag = this->writeFile(common::CONFIG_PATH_FILE_THRESHOLD_CONFIG, config_default);
+    if (flag)
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void Storage::handleFactory(void *arg)
 {
   /* remove config device in files */
@@ -365,6 +453,7 @@ void Storage::init(void *arg)
     /* load all data to cache */
     self->loadWifiConfig();
     self->loadServerConfig();
+    self->loadThresholdTriggerConfig();
 
     /* get mac device by interface station use esp_mac */
     esp_read_mac(cacheManager.device_mac, ESP_MAC_WIFI_STA);
@@ -392,7 +481,7 @@ void Storage::onReceive(CentralServices s, void *data)
   {
   case CentralServices::REFACTOR:
   {
-    xTaskCreate(this->handleFactory, "handleFactory", 4 * 1024, this, 10, NULL); 
+    xTaskCreate(this->handleFactory, "handleFactory", 4 * 1024, this, 10, NULL);
     break;
   }
   case CentralServices::BLUETOOTH:

@@ -5,4 +5,6 @@
 	path = components/arduino-esp32
 	url = https://github.com/espressif/arduino-esp32.git
 	branch = idf-release/v5.3
+    shallow = true
+	depth = 1
 

@@ -47,14 +47,20 @@ public:
 
   bool nvsSetString(std::string key, std::string value);
   std::string nvsGetString(std::string key);
+  std::string thresholdTriggerConfig(void);
 
   bool saveWifiConfig(void);
   bool saveServerConfig(void);
-  bool loadServerConfig(void);
+  bool saveThresholdTriggerConfig(void);
 
+  bool loadServerConfig(void);
   bool loadWifiConfig(void);
+  bool loadThresholdTriggerConfig(void);
+
   json generateDefaultWifiConfig(void);
   json generateDefaultServerConfig(void);
+  json generateDefaultThresholdsConfig(void);
+  
   static void handleFactory(void *arg);
 
 private:

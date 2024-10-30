@@ -1,5 +1,8 @@
 #include "Sensor.hpp"
+#include "Cache.h"
+#include "Buzzer.hpp"
 
+#include "driver_sht31.h"
 #include "MQSensor.h"
 
 #include <iostream>
@@ -17,36 +20,64 @@ using namespace ServicePayload;
 static const char *TAG = "Sensor";
 static TaskHandle_t _taskSampleValue = NULL;
 
+/* sht31 */
 MQUnifiedsensor MQ2("ESP32", 5, 12, GPIO_NUM_34, "MQ-2");
 
 void Sensor::sampleValue(void *arg)
 {
   Sensor *self = static_cast<Sensor *>(arg);
+  Buzzer *buzzer = static_cast<Buzzer *>(self->getObserver(CentralServices::BUZZER));
   uint8_t random;
-  double temperature, humidity, smoke;
-  json body = json::object();
+  float temperature, humidity, smoke;
+  json body;
+  bool flag_warning = false;
 
   while (true)
   {
     /* update data sensor MQ2 */
     MQ2.update();
+    sht31_read_temp_humi(&temperature, &humidity);
 
     /* get random */
     random = esp_random();
-    /* get temperature from random */
-    temperature = random % 100;
-    /* get humidity from random */
-    humidity = random % 150;
     /* get smoke from data */
     smoke = MQ2.readSensor();
 
+    body["_ck"] = "_none";
+    body["smoke"] = smoke;
     body["temperature"] = temperature;
     body["humidity"] = humidity;
-    body["smoke"] = smoke;
 
     ESP_LOGI(TAG, "Sensor sampleValue: %s", body.dump(2).c_str());
 
     self->notify(self->_service, CentralServices::MQTT, new RecievePayload_2<SensorType, std::string>(SENSOR_SEND_SAMPLE_DATA, body.dump()));
+
+    /* check warning */
+    if (temperature > cacheManager.thresholds_temp[0])
+    {
+      flag_warning = true;
+    }
+
+    if (smoke > cacheManager.thresholds_smoke[0])
+    {
+      flag_warning = true;
+    }
+
+    if (flag_warning)
+    {
+      if (buzzer->stateWarning() == false)
+      {
+        buzzer->startWarning();
+      }
+    }
+    else
+    {
+      /* check state warning & stop */
+      if (buzzer->stateWarning())
+      {
+        buzzer->stopWarning();
+      }
+    }
 
     /* get value every 5 seconds */
     vTaskDelay(5000 / portTICK_PERIOD_MS);
@@ -77,6 +108,8 @@ void Sensor::init(void *arg)
   MQ2.setB(-2.162);
   MQ2.setRL(1);
   MQ2.init();
+
+  sht31_init();
 
   /* Start calibrate */
   ESP_LOGI(TAG, "Calibrate R0");

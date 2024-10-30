@@ -2,6 +2,7 @@
 #include "Helper.hpp"
 #include "ApiCaller.hpp"
 #include "Cache.h"
+#include "Relay.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -36,6 +37,20 @@ static std::map<ChannelMqtt, std::string> _gb_channel_topic = {
     {ChannelMqtt::CHANNEL_ACTIVE, "/active"},
 };
 
+void Mqtt::notifySyncThresholdTrigger(void *arg)
+{
+  Mqtt *self = static_cast<Mqtt *>(arg);
+  json body;
+
+  body["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
+  body["_type"] = common::CONFIG_NOTIFY_SYNC_THRESHOLD;
+  body["smoke"] = cacheManager.thresholds_smoke;
+  body["temp"] = cacheManager.thresholds_temp;
+  body["humi"] = cacheManager.thresholds_humi;
+
+  self->sendMessage(ChannelMqtt::CHANNEL_NOTIFY, body.dump());
+}
+
 void Mqtt::notifyDeviceCreated(void *arg)
 {
   Mqtt *self = static_cast<Mqtt *>(arg);
@@ -64,6 +79,7 @@ void Mqtt::onConnected(void *handler_args, esp_event_base_t base, int32_t event_
   if (api->getCacheApiCallRecently() == true)
   {
     xTaskCreate(&Mqtt::notifyDeviceCreated, "notifyDeviceCreated", 4 * 1024, self, 5, NULL);
+    xTaskCreate(&Mqtt::notifySyncThresholdTrigger, "notifySyncThresholdTrigger", 4 * 1024, self, 6, NULL);
     api->setCacheApiCallRecently(false);
   }
 }
@@ -196,7 +212,61 @@ void Mqtt::recieveMsg(void *arg)
 
       try
       {
-        /* handle message from here */
+        json data = json::parse(payload);
+
+        /* handle message from topic control */
+        if (_gb_channel_topic[ChannelMqtt::CHANNEL_CONTROL].compare(topic) == 0)
+        {
+          std::string _type = data.at("_type").get<std::string>();
+
+          if (_type.compare(common::CONFIG_CONTROL_TYPE_GPIO) == 0)
+          {
+            std::string _mode = data.at("_mode").get<std::string>();
+
+            if (_mode.compare(common::CONFIG_CONTROL_MODE_ALL_GPIO) == 0)
+            {
+              const bool state = data.at("state").get<bool>();
+
+              std::map<std::string, std::any> _data;
+
+              _data["state"] = state;
+              _data["mode"] = ModeControl::ALL;
+
+              self->notify(self->_service, CentralServices::RELAY, new RecievePayload_2<RelayType, std::map<std::string, std::any>>(ServiceType::EVENT_CHANGE_STATE, _data));
+            }
+            else if (_mode.compare(common::CONFIG_CONTROL_MODE_MULTIPLE_GPIO) == 0)
+            {
+              const std::vector<int> pos = data.at("pos").get<std::vector<int>>();
+              json::value_t type = data.at("state").type();
+            }
+            else if (_mode.compare(common::CONFIG_CONTROL_MODE_SINGLE_GPIO) == 0)
+            {
+              const int pos = data.at("pos").get<int>();
+              const bool state = data.at("state").get<bool>();
+
+              std::map<std::string, std::any> _data;
+
+              _data["state"] = state;
+              _data["pos"] = pos;
+              _data["mode"] = ModeControl::SINGLE;
+
+              self->notify(self->_service, CentralServices::RELAY, new RecievePayload_2<RelayType, std::map<std::string, std::any>>(ServiceType::EVENT_CHANGE_STATE, _data));
+            }
+          }
+          else if (_type.compare(common::CONFIG_CONTROL_TYPE_BUZZER) == 0)
+          {
+            const bool state = data.at("state").get<bool>();
+
+            if (state)
+            {
+              self->notify(self->_service, CentralServices::BUZZER, new RecievePayload_2<BuzzerType, nullptr_t>(ServiceType::EVENT_BUZZER_START, nullptr));
+            }
+            else
+            {
+              self->notify(self->_service, CentralServices::BUZZER, new RecievePayload_2<BuzzerType, nullptr_t>(ServiceType::EVENT_BUZZER_STOP, nullptr));
+            }
+          }
+        }
       }
       catch (const std::exception &e)
       {

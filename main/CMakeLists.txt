@@ -16,9 +16,15 @@ set(
   "ApiCaller/ApiCaller.cpp"
   "Sensor/Sensor.cpp"
   "Sensor/MQSensor.cpp"
+  "Sensor/SHT31Sensor.cpp"
+  "Sensor/SHT31.cpp"
   "SNTP/SNTP.cpp"
   "Screen/Screen.cpp"
   "Screen/lcd_native.c"
+  "ExternalLibs/SoftWire.cpp"
+  "Relay/Relay.cpp"
+  "Buzzer/Buzzer.cpp"
+  "RocketScript/RocketScript.cpp"
 )
 
 set(
@@ -39,6 +45,10 @@ set(
   "Sensor/include"
   "SNTP/include"
   "Screen/include"
+  "ExternalLibs/include"
+  "Relay/include"
+  "Buzzer/include"
+  "RocketScript/include"
 )
 
 idf_component_register(SRCS "main.cpp" ${SOURCE} ${NATIVE_LIBS} INCLUDE_DIRS "." ${HEADERS})

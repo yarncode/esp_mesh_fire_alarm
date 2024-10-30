@@ -27,7 +27,7 @@ void Log::init(void *arg)
     self->heapSize = esp_get_free_heap_size();
 
     /* log for esp native */
-    ESP_LOGI(TAG, "| [*** RAM Monitor ***]");
+    ESP_LOGI(TAG, "[ *** RAM Monitor *** ]");
     ESP_LOGI(TAG, "| Free heap size: %" PRIu32 " (bytes)", self->heapSize);
 
     /* log for mesh info */
@@ -38,7 +38,7 @@ void Log::init(void *arg)
     ESP_LOGI(TAG, "| Parent Port: %" PRId16, mesh->parentAddress.mip.port);
     ESP_LOGI(TAG, "| Node MAC: " MACSTR, MAC2STR(mesh->meshAddress.addr));
     ESP_LOGI(TAG, "| Node IP: " IPSTR, IP2STR(&mesh->currentIp));
-    ESP_LOGI(TAG, "| Node Port: %" PRId16, mesh->meshAddress.mip.port);
+    ESP_LOGI(TAG, "[ Node Port: %" PRId16, mesh->meshAddress.mip.port);
 
     vTaskDelay(10 * 1000 / portTICK_PERIOD_MS); // log every 10 seconds
   }

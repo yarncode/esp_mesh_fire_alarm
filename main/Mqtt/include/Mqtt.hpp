@@ -46,6 +46,7 @@ private:
   void onDisconnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
   static void init(void *arg);
   static void deinit(void *arg);
+  static void notifySyncThresholdTrigger(void *arg);
   static void notifyDeviceCreated(void *arg);
   static void recieveMsg(void *arg);
   static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);

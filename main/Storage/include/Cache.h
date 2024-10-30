@@ -37,6 +37,11 @@ public:
   std::string serverIp;
   std::string protocol;
   int serverPort;
+
+  /* threshold trigger */
+  std::vector<int> thresholds_temp;
+  std::vector<int> thresholds_humi;
+  std::vector<int> thresholds_smoke;
 };
 
 extern Cache cacheManager;

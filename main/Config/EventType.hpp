@@ -81,6 +81,17 @@ namespace ServiceType
     SNTP_STOP,
     SNTP_RESTART,
   };
+
+  enum BuzzerType
+  {
+    EVENT_BUZZER_START,
+    EVENT_BUZZER_STOP,
+  };
+
+  enum RelayType
+  {
+    EVENT_CHANGE_STATE,
+  };
 }
 
 namespace ServicePayload

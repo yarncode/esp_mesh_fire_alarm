@@ -539,6 +539,10 @@ void Mesh::initMeshNative(void)
   cfg.mesh_ap.nonmesh_max_connection = 0;
   memcpy((uint8_t *)&cfg.mesh_ap.password, this->meshPassword.c_str(), this->meshPassword.length());
   ESP_ERROR_CHECK(esp_mesh_set_config(&cfg));
+  
+#ifdef CONFIG_MODE_GATEWAY
+  esp_mesh_set_type(MESH_ROOT);
+#endif
 
   this->_isStartBaseMesh = true;
 }
