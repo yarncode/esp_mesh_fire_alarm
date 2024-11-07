@@ -1,18 +1,11 @@
-// Copyright 2021 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #pragma once
+
 #include <esp_err.h>
 #include <esp_event.h>
 
@@ -20,7 +13,8 @@
 extern "C" {
 #endif
 
-#define SHA_SIZE  (CONFIG_APP_RETRIEVE_LEN_ELF_SHA / 2)
+#define RTC_STORE_HEX_SHA_SIZE  16                              /* Length of ELF SHA as HEX string*/
+#define RTC_STORE_SHA_SIZE      (RTC_STORE_HEX_SHA_SIZE / 2)    /* Length of ELF SHA as raw bytes*/
 
 /**
  * @brief header record to identify firmware/boot data a record represent
@@ -28,7 +22,7 @@ extern "C" {
 typedef struct {
     uint8_t gen_id;             // generated on each hard reset
     uint8_t boot_cnt;           // updated on each soft reboot
-    char sha_sum[SHA_SIZE];     // elf shasum
+    char sha_sum[RTC_STORE_SHA_SIZE];     // elf shasum
     bool valid;                 //
 } rtc_store_meta_header_t;
 
@@ -51,7 +45,6 @@ rtc_store_meta_header_t *rtc_store_get_meta_record_current();
  * @brief Non critical data header
  */
 typedef struct {
-    const char *dg;     /*!< Data group of non critical data eg: heap, wifi, ip */
     uint32_t len;       /*!< Length of data */
 } rtc_store_non_critical_data_hdr_t;
 

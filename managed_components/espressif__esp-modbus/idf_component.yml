@@ -1,6 +1,5 @@
 dependencies:
-  idf:
-    version: '>=4.3'
+  idf: '>=4.3'
 description: ESP-MODBUS is the official Modbus library for Espressif SoCs.
 files:
   exclude:
@@ -8,5 +7,9 @@ files:
   - docs
   - test/**/*
   - test
+  - arch
+  - arch/**/*
+  - build*/**/*
+  - '**/*.zip'
 url: https://github.com/espressif/esp-modbus
-version: 1.0.15
+version: 1.0.16

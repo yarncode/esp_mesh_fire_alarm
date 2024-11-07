@@ -24,6 +24,7 @@ typedef enum
   LED_LOOP_200MS,
   LED_LOOP_500MS,
   LED_LOOP_DUP_SIGNAL,
+  LED_LOOP_2DUP_SIGNAL,
 } led_custume_mode_t;
 
 class Led : public Observer

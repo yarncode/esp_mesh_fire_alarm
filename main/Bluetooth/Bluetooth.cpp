@@ -39,7 +39,7 @@ void Bluetooth::onWrite(BLECharacteristic *characteristic)
 
     this->_rawData = rxValue.c_str();
 
-    xTaskCreate(this->saveWifiAndStartMesh, "Bluetooth::saveWifiAndStartMesh", 4 * 1024, this, 5, NULL);
+    xTaskCreate(this->saveWifiAndStartMesh, "Bluetooth::saveWifiAndStartMesh", 6 * 1024, this, 5, NULL);
   }
   catch (const std::exception &e)
   {
@@ -62,13 +62,19 @@ void Bluetooth::saveWifiAndStartMesh(void *arg)
 
     /* save info wifi to storage */
     self->notify(self->_service, CentralServices::STORAGE, new RecievePayload_2<StorageEventType, std::map<std::string, std::string>>(EVENT_STORAGE_UPDATE_INFO_WIFI, payload));
-    
+
     /* stop service bluetooth */
     self->stop();
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     /* start mesh service */
     self->notify(self->_service, CentralServices::MESH, new RecievePayload_2<MeshEventType, nullptr_t>(ServiceType::EVENT_MESH_START, nullptr));
+
+#ifdef CONFIG_MODE_GATEWAY
+
+    self->notify(self->_service, CentralServices::API_CALLER, new RecievePayload_2<ApiCallerType, nullptr_t>(ApiCallerType::EVENT_API_CALLER_ADD_DEVICE, nullptr));
+
+#endif
   }
   catch (const std::exception &e)
   {
@@ -90,18 +96,20 @@ void Bluetooth::onRead(BLECharacteristic *characteristic)
 void Bluetooth::start(void)
 {
   ESP_LOGI(TAG, "Bluetooth start");
-  xTaskCreate(&Bluetooth::init, "Bluetooth::init", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Bluetooth::init, "Bluetooth::init", 4 * 1024, this, 4, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Bluetooth::stop(void)
 {
   ESP_LOGI(TAG, "Bluetooth stop");
-  xTaskCreate(&Bluetooth::deinit, "Bluetooth::deinit", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Bluetooth::deinit, "Bluetooth::deinit", 4 * 1024, this, 5, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Bluetooth::init(void *arg)
 {
   Bluetooth *self = static_cast<Bluetooth *>(arg);
+
+  ESP_LOGI(TAG, "Bluetooth init");
 
   /* check service mesh is running */
   Mesh *mesh = static_cast<Mesh *>(self->getObserver(CentralServices::MESH));
@@ -154,7 +162,7 @@ void Bluetooth::init(void *arg)
     self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_LOOP_DUP_SIGNAL));
   }
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Bluetooth::deinit(void *arg)
@@ -170,7 +178,7 @@ void Bluetooth::deinit(void *arg)
     self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
   }
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Bluetooth::onReceive(CentralServices s, void *data)

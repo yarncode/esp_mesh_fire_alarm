@@ -1,5 +1,9 @@
 #include "Storage.hpp"
 #include "Cache.h"
+#include "Button.hpp"
+#include "Led.hpp"
+#include "Relay.hpp"
+#include "Helper.hpp"
 
 #include <nvs_flash.h>
 #include "esp_spiffs.h"
@@ -103,7 +107,7 @@ json Storage::generateDefaultServerConfig(void)
   j["serverIp"] = "";
   j["protocol"] = "";
   j["mainToken"] = "";
-  
+
   cacheManager.serverHost = "";
   cacheManager.serverPort = (int)0;
   cacheManager.m_username = "";
@@ -459,11 +463,36 @@ void Storage::init(void *arg)
     esp_read_mac(cacheManager.device_mac, ESP_MAC_WIFI_STA);
   }
 
+  /* load input gpio state */
+  // int index = 0;
+  // for (auto it = common::CONFIG_GPIO_INPUT.begin(); it != common::CONFIG_GPIO_INPUT.end(); it++)
+  // {
+  //   std::string name = it->second.name;
+  //   cacheManager.input_state[index] = nvs_get_bool(name);
+  //   index++;
+  // }
+
+  /* load output gpio state */
+  int index = 0;
+  for (auto it = common::CONFIG_GPIO_OUTPUT.begin(); it != common::CONFIG_GPIO_OUTPUT.end(); it++)
+  {
+    std::string name = it->second.name;
+    cacheManager.output_state[index] = nvs_get_bool(name);
+    index++;
+  }
+
   /* notify all service */
   // for (auto observer : self->observers)
   // {
   //   self->notify(self->_service, observer.first, new ServicePayload::RecievePayload<ServiceType::StorageEventType>(ServiceType::StorageEventType::EVENT_STORAGE_STARTED, {}));
   // }
+  Button *button = static_cast<Button *>(self->getObserver(CentralServices::BUTTON));
+  Relay *relay = static_cast<Relay *>(self->getObserver(CentralServices::RELAY));
+  Led *led = static_cast<Led *>(self->getObserver(CentralServices::LED));
+
+  button->start();
+  relay->start();
+  led->start();
 
   /* start mesh service & log */
   self->notify(self->_service, CentralServices::MESH, new RecievePayload_2<MeshEventType, nullptr_t>(EVENT_MESH_START, nullptr));

@@ -19,8 +19,10 @@ class LCDScreen : public Observer
 public:
   LCDScreen()
   {
-    this->_service = CentralServices::NONE;
+    this->_service = CentralServices::LCD;
   };
+  void clearLine(uint8_t row);
+  void writeByRow(uint8_t row, uint8_t col, std::string text);
   void onReceive(CentralServices s, void *data) override;
   void start(void);
   void stop(void);
@@ -28,4 +30,7 @@ public:
 private:
   static void init(void *arg);
   static void deinit(void *arg);
+
+  int count_childs;
+
 };

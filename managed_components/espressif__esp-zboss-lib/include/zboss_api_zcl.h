@@ -695,6 +695,8 @@ typedef enum zb_zcl_device_callback_id_e
   ZB_ZCL_OTA_UPGRADE_QUERY_IMAGE_RESP_CB_ID,
   /** Inform user about Basic Reset to Factory Defaults commands  */
   ZB_ZCL_BASIC_RESET_CB_ID,
+  /** Inform user about call Thermostat weekly schedule command @see HA spec 10.1.3.3 */
+  ZB_ZCL_THERMOSTAT_WEEKLY_SCHEDULE_SET_CB_ID,
   /** Inform user about call Thermostat command @see HA spec 10.1.3.3 */
   ZB_ZCL_THERMOSTAT_VALUE_CB_ID,
   /** Inform user about Check-In command from polled device */
@@ -1947,6 +1949,7 @@ typedef struct zb_zcl_device_callback_param_s
     /* moved thermostat_value_param out of ZB_ENABLE_HA to be able to compile without that define */
 #if defined ZB_ZCL_SUPPORT_CLUSTER_THERMOSTAT
    zb_zcl_thermostat_value_param_t thermostat_value_param;
+   zb_zcl_thermostat_weekly_schedule_table_param_t thermostat_weekly_schedule_table_param;
 #endif
 #if defined (ZB_ZCL_SUPPORT_CLUSTER_IAS_WD)
    zb_zcl_ias_wd_squawk_value_param_t  squawk_value_param;
@@ -1995,13 +1998,16 @@ typedef struct zb_zcl_device_callback_param_s
   ((ZB_ZCL_DEVICE_CMD_PARAM(_param))->cb_param.gnr.out = _pvalue)
 
 /** Init all fields of device callback params. */
-#define ZB_ZCL_DEVICE_CMD_PARAM_INIT_WITH(_param, _cb_id, _status, _cmd_info, _in, _out) \
-  (ZB_BZERO(ZB_ZCL_DEVICE_CMD_PARAM(_param), sizeof(*ZB_ZCL_DEVICE_CMD_PARAM(_param))), \
-   (ZB_ZCL_DEVICE_CMD_PARAM_CB_ID(_param) = _cb_id, \
-    (ZB_ZCL_DEVICE_CMD_PARAM_STATUS(_param) = _status, \
-     (ZB_ZCL_DEVICE_CMD_PARAM_CMD_INFO(_param) = _cmd_info, \
-      (ZB_ZCL_DEVICE_CMD_PARAM_IN_SET(_param, _in), \
-       (ZB_ZCL_DEVICE_CMD_PARAM_OUT_SET(_param, _out)))))))
+#define ZB_ZCL_DEVICE_CMD_PARAM_INIT_WITH(_param, _cb_id, _status, _cmd_info, _in, _out)                              \
+  (ZB_BZERO(ZB_ZCL_DEVICE_CMD_PARAM(_param), sizeof(*ZB_ZCL_DEVICE_CMD_PARAM(_param))),                               \
+    (ZB_ZCL_DEVICE_CMD_PARAM_CB_ID(_param) = _cb_id,                                                                  \
+      (ZB_ZCL_DEVICE_CMD_PARAM_ENDPOINT(_param) = (_cmd_info != NULL ?                                                \
+       ZB_ZCL_PARSED_HDR_SHORT_DATA((typeof(ZB_ZCL_DEVICE_CMD_PARAM_CMD_INFO(_param)))_cmd_info).dst_endpoint : 0x00),\
+        (ZB_ZCL_DEVICE_CMD_PARAM_STATUS(_param) = _status,                                                            \
+         (ZB_ZCL_DEVICE_CMD_PARAM_CMD_INFO(_param) = _cmd_info,                                                       \
+          (ZB_ZCL_DEVICE_CMD_PARAM_IN_SET(_param, _in),                                                               \
+           (ZB_ZCL_DEVICE_CMD_PARAM_OUT_SET(_param, _out))))))))
+
 /** @endcond */ /* internals_doc */
 
 /** Get INPUT device callback parameter from buffer reference.
@@ -2040,6 +2046,10 @@ typedef struct zb_zcl_device_callback_param_s
  */
 #define ZB_ZCL_DEVICE_CMD_PARAM_STATUS(_param) \
   ((ZB_ZCL_DEVICE_CMD_PARAM(_param))->status)
+
+/* Set ENDPOINT device callback parameter with specific value. */
+#define ZB_ZCL_DEVICE_CMD_PARAM_ENDPOINT(_param) \
+     ((ZB_ZCL_DEVICE_CMD_PARAM(_param))->endpoint)
 
 /** @cond internals_doc */
 /** @brief ZCL default handler.

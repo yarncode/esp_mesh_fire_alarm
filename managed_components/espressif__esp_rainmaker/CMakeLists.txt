@@ -18,14 +18,16 @@ set(core_srcs "src/core/esp_rmaker_core.c"
 
 set(priv_req protobuf-c json_parser json_generator
              nvs_flash esp_http_client app_update esp-tls mbedtls esp_https_ota
-             console esp_local_ctrl esp_https_server mdns esp_schedule efuse driver rmaker_common)
+             console esp_local_ctrl esp_https_server mdns esp_schedule efuse driver rmaker_common wifi_provisioning)
+
+if ("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.0")
+    list(APPEND priv_req esp_app_format)
+endif()
 
 if ("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.1")
     # NAT64 and DNS64 features were introduced for openthread component in IDF v5.1
+    # Network Provisioning component is supported for IDF v5.1+
     list(APPEND priv_req openthread network_provisioning)
-else()
-    # wifi_provisioning could be replaced by network_provisioning for IDF v5.1+
-    list(APPEND priv_req wifi_provisioning)
 endif()
 
 if(CONFIG_ESP_RMAKER_ASSISTED_CLAIM)
@@ -56,6 +58,17 @@ set(ota_srcs "src/ota/esp_rmaker_ota.c"
         "src/ota/esp_rmaker_ota_using_topics.c")
 set(ota_priv_includes "src/ota")
 
+# Thread BR
+set(thread_br_srcs )
+set(thread_br_priv_includes )
+if (CONFIG_OPENTHREAD_BORDER_ROUTER)
+    list(APPEND thread_br_srcs "src/thread_br/esp_rmaker_thread_br.c"
+            "src/thread_br/esp_rmaker_thread_br_service.c"
+            "src/thread_br/esp_rmaker_thread_br_internal.c"
+            "src/thread_br/esp_rmaker_thread_br_launcher.c")
+    list(APPEND thread_br_priv_includes "src/thread_br")
+endif()
+
 # CONSOLE
 set(console_srcs "src/console/esp_rmaker_console.c"
         "src/console/esp_rmaker_commands.c")
@@ -66,9 +79,9 @@ set(standard_types_srcs "src/standard_types/esp_rmaker_standard_params.c"
         "src/standard_types/esp_rmaker_standard_devices.c"
         "src/standard_types/esp_rmaker_standard_services.c")
 
-idf_component_register(SRCS ${core_srcs} ${mqtt_srcs} ${ota_srcs} ${standard_types_srcs} ${console_srcs}
+idf_component_register(SRCS ${core_srcs} ${mqtt_srcs} ${ota_srcs} ${standard_types_srcs} ${console_srcs} ${thread_br_srcs}
                        INCLUDE_DIRS "include"
-                       PRIV_INCLUDE_DIRS ${core_priv_includes} ${ota_priv_includes} ${console_priv_includes} ${mqtt_priv_includes}
+                       PRIV_INCLUDE_DIRS ${core_priv_includes} ${ota_priv_includes} ${console_priv_includes} ${mqtt_priv_includes} ${thread_br_priv_includes}
                        REQUIRES rmaker_common
                        PRIV_REQUIRES ${priv_req})
 

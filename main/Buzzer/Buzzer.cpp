@@ -28,30 +28,37 @@ void Buzzer::_startWarning(void *arg)
   while (true)
   {
     digitalWrite(GPIO_NUM_27, HIGH);
-    vTaskDelay(200 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     digitalWrite(GPIO_NUM_27, LOW);
-    vTaskDelay(200 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Buzzer::startWarning(void)
 {
   ESP_LOGI(TAG, "Buzzer startWarning");
-  xTaskCreate(&Buzzer::_startWarning, "Buzzer::_startWarning", 2 * 1024, this, 5, &_taskStartWarning);
+
+  if (_taskStartWarning != nullptr)
+  {
+    return;
+  }
+
+  xTaskCreateWithCaps(&Buzzer::_startWarning, "Buzzer::_startWarning", 2 * 1024, this, 5, &_taskStartWarning, MALLOC_CAP_SPIRAM);
 }
 
 void Buzzer::stopWarning(void)
 {
   ESP_LOGI(TAG, "Buzzer stopWarning");
-  this->_stateWarning = false;
 
-  if(_taskStartWarning != nullptr)
+  if (_taskStartWarning != nullptr)
   {
-    vTaskDelete(_taskStartWarning);
+    vTaskDeleteWithCaps(_taskStartWarning);
     _taskStartWarning = nullptr;
   }
+  
+  this->_stateWarning = false;
 }
 
 void Buzzer::start(void)

@@ -41,7 +41,6 @@
 #endif
 
 #define INSIGHTS_DEBUG_ENABLED      CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
-#define APP_ELF_SHA256_LEN          (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
 
 #if CONFIG_ESP_INSIGHTS_CLOUD_POST_MIN_INTERVAL_SEC > CONFIG_ESP_INSIGHTS_CLOUD_POST_MAX_INTERVAL_SEC
 #error "CONFIG_ESP_INSIGHTS_CLOUD_POST_MIN_INTERVAL_SEC must be less than or equal to CONFIG_ESP_INSIGHTS_CLOUD_POST_MAX_INTERVAL_SEC"
@@ -94,7 +93,7 @@ typedef struct {
     int data_msg_id;
     uint32_t data_msg_len;
     SemaphoreHandle_t data_lock;
-    char app_sha256[APP_ELF_SHA256_LEN];
+    char app_sha256[DIAG_HEX_SHA_SIZE + 1];
     bool data_sent;
 #if SEND_INSIGHTS_META
 #if INSIGHTS_CMD_RESP
@@ -398,7 +397,6 @@ static void send_insights_config(void)
 /* Returns true if ESP Insights metadata CRC is changed */
 static bool insights_meta_changed(void)
 {
-    return true;
     uint32_t nvs_crc;
     uint32_t meta_crc = esp_diag_meta_crc_get();
     esp_err_t err = esp_insights_meta_nvs_crc_get(&nvs_crc);
@@ -406,7 +404,7 @@ static bool insights_meta_changed(void)
         /* crc found and matched, no need to send insights meta */
         return false;
     }
-    ESP_LOGI(TAG, "Insights metrics metadata changed");
+    ESP_LOGI(TAG, "Insights metadata changed");
     s_insights_data.meta_crc = meta_crc;
     return true;
 }
@@ -924,7 +922,7 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
         ESP_LOGE(TAG, "Failed to get device info");
         goto enable_err;
     }
-    memcpy(s_insights_data.app_sha256, device_info.app_elf_sha256, sizeof(s_insights_data.app_sha256));
+    memcpy((uint8_t *) s_insights_data.app_sha256, (uint8_t *) device_info.app_elf_sha256, sizeof(s_insights_data.app_sha256));
     err = esp_event_handler_register(INSIGHTS_EVENT, ESP_EVENT_ANY_ID, insights_event_handler, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register event handler for INSIGHTS_EVENTS");

@@ -1,16 +1,8 @@
-// Copyright 2021 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stdint.h>
 #include <string.h>
@@ -45,7 +37,7 @@
  *    which may get stuck in recursive mutex etc. Please be careful if you are using logs...
  */
 
-#if CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
+#if CONFIG_DIAG_DATA_STORE_DBG_PRINTS
 #define RTC_STORE_DBG_PRINTS 1
 #endif
 
@@ -102,7 +94,7 @@ typedef struct {
     rbuf_data_t critical;
     rbuf_data_t non_critical;
     rtc_store_meta_header_t *meta_hdr;
-    char sha_sum[2 * SHA_SIZE + 1];
+    char sha_sum[RTC_STORE_HEX_SHA_SIZE + 1];
 } rtc_store_priv_data_t;
 
 // have a strategy to invalidate data beyond this
@@ -324,7 +316,6 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     }
 #endif
     memset(&header, 0, sizeof(header));
-    header.dg = dg;
     header.len = len;
 
     // we have made sure of free size at this point, write index byte, data header and then actual data
@@ -513,6 +504,7 @@ static inline uint8_t to_int_digit(unsigned val)
     return (val <= '9') ? (val - '0') : (val - 'a' + 10);
 }
 
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0)
 static void hex_to_bytes(uint8_t *src, uint8_t *dst, int out_len)
 {
     for (int i = 0; i < out_len; i++) {
@@ -521,6 +513,7 @@ static void hex_to_bytes(uint8_t *src, uint8_t *dst, int out_len)
         dst[i] = (val0 << 4) | (val1);
     }
 }
+#endif
 
 static esp_err_t rtc_store_meta_hdr_init()
 {
@@ -565,11 +558,12 @@ skip_nvs_read_write:
 
     // populate meta header
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-    esp_app_get_elf_sha256(s_priv_data.sha_sum, sizeof(s_priv_data.sha_sum));
+    const uint8_t* src = esp_app_get_description()->app_elf_sha256;
+    memcpy((uint8_t *)s_priv_data.meta_hdr->sha_sum, src, RTC_STORE_SHA_SIZE);
 #else
     esp_ota_get_app_elf_sha256(s_priv_data.sha_sum, sizeof(s_priv_data.sha_sum));
+    hex_to_bytes((uint8_t *) s_priv_data.sha_sum, (uint8_t *) s_priv_data.meta_hdr->sha_sum, RTC_STORE_SHA_SIZE);
 #endif
-    hex_to_bytes((uint8_t *) s_priv_data.sha_sum, (uint8_t *) s_priv_data.meta_hdr->sha_sum, SHA_SIZE);
 
     s_priv_data.meta_hdr->gen_id = gen_id;
     s_priv_data.meta_hdr->boot_cnt = boot_cnt;

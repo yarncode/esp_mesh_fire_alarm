@@ -51,12 +51,18 @@ extern "C" void app_main(void)
     storage.registerTwoWayObserver(&mesh, CentralServices::MESH);
     storage.registerTwoWayObserver(&logger, CentralServices::LOG);
     storage.registerTwoWayObserver(&ble, CentralServices::BLUETOOTH);
+    storage.registerTwoWayObserver(&relay, CentralServices::RELAY);
+    storage.registerTwoWayObserver(&button, CentralServices::BUTTON);
+    storage.registerTwoWayObserver(&led, CentralServices::LED);
     mesh.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
     button.registerTwoWayObserver(&ble, CentralServices::BLUETOOTH);
+    button.registerTwoWayObserver(&mesh, CentralServices::MESH);
     logger.registerObserver(&mesh, CentralServices::MESH);
     ble.registerTwoWayObserver(&mesh, CentralServices::MESH);
     ble.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
+    screen.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
     api.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
+    ble.registerTwoWayObserver(&api, CentralServices::API_CALLER);
     mesh.registerTwoWayObserver(&api, CentralServices::API_CALLER);
     mesh.registerTwoWayObserver(&sntp, CentralServices::SNTP);
     mqtt.registerTwoWayObserver(&relay, CentralServices::RELAY);
@@ -67,6 +73,7 @@ extern "C" void app_main(void)
     buzzer.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
 #endif
 
+    mesh.registerObserver(&led, CentralServices::LED);
     button.registerObserver(&led, CentralServices::LED);
     ble.registerObserver(&led, CentralServices::LED);
     mqtt.registerObserver(&factory, CentralServices::REFACTOR);
@@ -75,16 +82,13 @@ extern "C" void app_main(void)
     factory.registerObserver(&storage, CentralServices::STORAGE);
 
     storage.start(); // run first storage
-    button.start();  // run button
-    relay.start();   // run lcd
-    led.start();     // run button
 
 #ifdef CONFIG_MODE_NODE
     sensor.start();  // run sensor
 #endif
 
 #ifdef CONFIG_MODE_GATEWAY
-    // screen.start();    // run lcd
+    screen.start();    // run lcd
 #endif
 
 #ifdef CONFIG_MODE_NODE

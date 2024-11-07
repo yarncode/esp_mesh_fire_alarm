@@ -13,9 +13,6 @@
 #include "ConstType.h"
 #include "EventType.hpp"
 
-#include "driver/gpio.h"
-#include "button.h"
-
 enum FNMode {
   FN_NONE,
   FN_CONFIG,
@@ -36,4 +33,5 @@ private:
   static void init(void *arg);
   static void deinit(void *arg);
   void handleFNMode(uint8_t mode);
+  static void button_db_click_cb(void *arg, void *data);
 };

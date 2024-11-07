@@ -15,7 +15,6 @@
 
 #include "esp_event.h"
 #include "esp_log.h"
-#include "mesh_netif.h"
 #include "esp_mesh.h"
 #include "esp_wifi.h"
 #include "esp_mac.h"
@@ -35,7 +34,11 @@ public:
   void startWiFi(void);
   void startMesh(void);
   bool isStarted(void);
-  
+
+#ifdef CONFIG_MODE_GATEWAY
+  void startEthernet(void);
+#endif
+
   int layer = -1;
   int lastLayer = 0;
   mesh_addr_t meshAddress;
@@ -44,6 +47,7 @@ public:
   esp_ip4_addr_t currentIp;
 
 private:
+  static void eth_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
   static void mesh_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
   static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
   static void init(void *arg);
@@ -67,9 +71,12 @@ private:
   bool _isStartBase = false;
   bool _isStartBaseWiFi = false;
   bool _isStartBaseMesh = false;
+  bool _isStartEthernet = false;
   bool _isStartTCP = false;
   bool _isStartLoopDefault = false;
   bool _isStartNetIF = false;
+  std::map<CentralServices, bool> _condition_state;
+
   static const uint8_t meshId[6];
   static const std::string meshPassword;
   /* router */

@@ -182,6 +182,8 @@ void ApiCaller::addDevice(void *arg)
     }
   }
 
+  ESP_LOGI(TAG, "ApiCaller addDevice done.");
+
   /* reset token active */
   cacheManager.activeToken = "";
   esp_http_client_cleanup(client);

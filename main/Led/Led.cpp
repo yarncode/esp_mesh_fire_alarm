@@ -9,6 +9,7 @@ using namespace ServicePayload;
 using namespace ServiceType;
 
 static const uint8_t LED_LOOP_DUP_SIGNAL_TIMES = 2;
+static const uint8_t LED_LOOP_2DUP_SIGNAL_TIMES = 4;
 static const char *TAG = "Led";
 static const std::vector<gpio_num_t> _leds = {GPIO_NUM_2};
 static const std::map<led_custume_mode_t, uint32_t> _led_mode = {
@@ -16,6 +17,7 @@ static const std::map<led_custume_mode_t, uint32_t> _led_mode = {
     {LED_LOOP_200MS, 200},
     {LED_LOOP_500MS, 500},
     {LED_LOOP_DUP_SIGNAL, 100},
+    {LED_LOOP_2DUP_SIGNAL, 100},
 };
 static TaskHandle_t _loop_led_task = NULL;
 
@@ -39,6 +41,7 @@ void Led::runLoopLedStatus(void *arg)
     else if (self->_select_led_mode == LED_LOOP_DUP_SIGNAL)
     {
       loop_counter = LED_LOOP_DUP_SIGNAL_TIMES;
+      sleep_time = _led_mode.at(self->_select_led_mode);
       while (loop_counter--)
       {
         gpio_set_level(GPIO_NUM_2, 1);
@@ -48,15 +51,28 @@ void Led::runLoopLedStatus(void *arg)
       }
       vTaskDelay((sleep_time * LED_LOOP_DUP_SIGNAL_TIMES * 2) / portTICK_PERIOD_MS);
     }
+    else if (self->_select_led_mode == LED_LOOP_2DUP_SIGNAL)
+    {
+      loop_counter = LED_LOOP_2DUP_SIGNAL_TIMES;
+      sleep_time = _led_mode.at(self->_select_led_mode);
+      while (loop_counter--)
+      {
+        gpio_set_level(GPIO_NUM_2, 1);
+        vTaskDelay(sleep_time / portTICK_PERIOD_MS);
+        gpio_set_level(GPIO_NUM_2, 0);
+        vTaskDelay(sleep_time / portTICK_PERIOD_MS);
+      }
+      vTaskDelay((sleep_time * LED_LOOP_2DUP_SIGNAL_TIMES * 2) / portTICK_PERIOD_MS);
+    }
   }
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Led::stopLoopLedStatus(void)
 {
   if (_loop_led_task != NULL)
   {
-    vTaskDelete(_loop_led_task);
+    vTaskDeleteWithCaps(_loop_led_task);
     _loop_led_task = NULL;
   }
 }
@@ -78,20 +94,20 @@ void Led::dispatchLedMode(led_custume_mode_t mode)
   if (_led_mode.contains(mode))
   {
     ESP_LOGI(TAG, "Led mode: %d", mode);
-    xTaskCreate(&this->runLoopLedStatus, "runLoopLedStatus", 3 * 1024, this, 5, &_loop_led_task);
+    xTaskCreateWithCaps(&this->runLoopLedStatus, "runLoopLedStatus", 3 * 1024, this, 5, &_loop_led_task, MALLOC_CAP_SPIRAM);
   }
 }
 
 void Led::start(void)
 {
   ESP_LOGI(TAG, "Led start");
-  xTaskCreate(&Led::init, "Led::init", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Led::init, "Led::init", 4 * 1024, this, 5, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Led::stop(void)
 {
   ESP_LOGI(TAG, "Led stop");
-  xTaskCreate(&Led::deinit, "Led::deinit", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Led::deinit, "Led::deinit", 4 * 1024, this, 5, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Led::init(void *arg)
@@ -119,7 +135,7 @@ void Led::init(void *arg)
   /* start config */
   gpio_config(&io_conf);
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Led::deinit(void *arg)
@@ -131,7 +147,7 @@ void Led::deinit(void *arg)
     gpio_set_level(led, 0);
   }
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Led::onReceive(CentralServices s, void *data)

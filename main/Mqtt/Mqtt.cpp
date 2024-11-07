@@ -37,6 +37,11 @@ static std::map<ChannelMqtt, std::string> _gb_channel_topic = {
     {ChannelMqtt::CHANNEL_ACTIVE, "/active"},
 };
 
+bool Mqtt::isConnected(void)
+{
+  return _gb_state_mqtt == MQTT_EVENT_CONNECTED ? true : false;
+}
+
 void Mqtt::notifySyncThresholdTrigger(void *arg)
 {
   Mqtt *self = static_cast<Mqtt *>(arg);
@@ -49,6 +54,30 @@ void Mqtt::notifySyncThresholdTrigger(void *arg)
   body["humi"] = cacheManager.thresholds_humi;
 
   self->sendMessage(ChannelMqtt::CHANNEL_NOTIFY, body.dump());
+
+  vTaskDeleteWithCaps(NULL);
+}
+
+void Mqtt::notifySyncGpio(void *arg)
+{
+  Mqtt *self = static_cast<Mqtt *>(arg);
+  json body;
+
+  body["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
+  body["_type"] = common::CONFIG_NOTIFY_SYNC_GPIO;
+
+  for (int i = 0; i < common::CONFIG_GPIO_INPUT_COUNT; i++)
+  {
+    body["input"][i] = cacheManager.input_state[i];
+  }
+  for (int i = 0; i < common::CONFIG_GPIO_OUTPUT_COUNT; i++)
+  {
+    body["output"][i] = cacheManager.output_state[i];
+  }
+
+  self->sendMessage(ChannelMqtt::CHANNEL_NOTIFY, body.dump());
+
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Mqtt::notifyDeviceCreated(void *arg)
@@ -57,16 +86,19 @@ void Mqtt::notifyDeviceCreated(void *arg)
   json body;
 
   body["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
-  body["mac"] = chipInfo::getMacBleDevice();
+  body["mac"] = chipInfo::getMacDevice();
   body["ip"] = cacheManager.ip;
   body["netmask"] = cacheManager.netmask;
   body["gateway"] = cacheManager.gateway;
   body["ssid"] = cacheManager.ssid;
   body["password"] = cacheManager.password;
 
+  body["input_gpio_count"] = common::CONFIG_GPIO_INPUT_COUNT;
+  body["output_gpio_count"] = common::CONFIG_GPIO_OUTPUT_COUNT;
+
   self->sendMessage(ChannelMqtt::CHANNEL_ACTIVE, body.dump());
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Mqtt::onConnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -74,14 +106,23 @@ void Mqtt::onConnected(void *handler_args, esp_event_base_t base, int32_t event_
   ESP_LOGI(TAG, "Mqtt Connected");
   Mqtt *self = static_cast<Mqtt *>(handler_args);
 
+  /* subscribe topic */
+  if (_gb_client != nullptr)
+  {
+    esp_mqtt_client_subscribe(_gb_client, _gb_channel_topic.at(ChannelMqtt::CHANNEL_CONTROL).c_str(), 1);
+  }
+
   /* check whether "api create device" is call recently */
   ApiCaller *api = static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
   if (api->getCacheApiCallRecently() == true)
   {
-    xTaskCreate(&Mqtt::notifyDeviceCreated, "notifyDeviceCreated", 4 * 1024, self, 5, NULL);
-    xTaskCreate(&Mqtt::notifySyncThresholdTrigger, "notifySyncThresholdTrigger", 4 * 1024, self, 6, NULL);
     api->setCacheApiCallRecently(false);
   }
+
+  xTaskCreateWithCaps(&Mqtt::notifyDeviceCreated, "notifyDeviceCreated", 4 * 1024, self, 5, NULL, MALLOC_CAP_SPIRAM);
+
+  xTaskCreateWithCaps(&Mqtt::notifySyncThresholdTrigger, "notifySyncThresholdTrigger", 4 * 1024, self, 6, NULL, MALLOC_CAP_SPIRAM);
+  xTaskCreateWithCaps(&Mqtt::notifySyncGpio, "notifySyncGpio", 4 * 1024, self, 7, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Mqtt::onDisconnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -91,14 +132,14 @@ void Mqtt::onDisconnected(void *handler_args, esp_event_base_t base, int32_t eve
 
 void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
-  ESP_LOGI(TAG, "Event dispatched from event loop base=%s, event_id=%" PRIi32 "", base, event_id);
+  // ESP_LOGI(TAG, "Event dispatched from event loop base=%s, event_id=%" PRIi32 "", base, event_id);
 
   Mqtt *self = static_cast<Mqtt *>(handler_args);
 
   int msg_id;
   esp_mqtt_event_handle_t event = (esp_mqtt_event_t *)event_data;
   esp_mqtt_client_handle_t client = event->client;
-  ESP_LOGW(TAG, "TCP log \n - connect_return_code: %d\n - error_type: %d\n - esp_transport_sock_errno: %d", event->error_handle->connect_return_code, event->error_handle->error_type, event->error_handle->esp_transport_sock_errno);
+  // ESP_LOGW(TAG, "TCP log \n - connect_return_code: %d\n - error_type: %d\n - esp_transport_sock_errno: %d", event->error_handle->connect_return_code, event->error_handle->error_type, event->error_handle->esp_transport_sock_errno);
 
   switch (event_id)
   {
@@ -173,6 +214,15 @@ void Mqtt::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t
   }
 }
 
+void Mqtt::notifyAckPayload(std::string ack)
+{
+  json _payload;
+  _payload["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
+  _payload["ack"] = ack;
+  _payload["code"] = common::CONFIG_NOTIFY_ACK_PAYLOAD;
+  this->sendMessage(ChannelMqtt::CHANNEL_NOTIFY, _payload.dump());
+}
+
 int Mqtt::sendMessage(ChannelMqtt chanel, std::string msg)
 {
   if (_gb_client != nullptr && _gb_state_mqtt == MQTT_EVENT_CONNECTED)
@@ -218,6 +268,16 @@ void Mqtt::recieveMsg(void *arg)
         if (_gb_channel_topic[ChannelMqtt::CHANNEL_CONTROL].compare(topic) == 0)
         {
           std::string _type = data.at("_type").get<std::string>();
+          std::string _ack = data.at("_ack").get<std::string>();
+
+          /*
+            {
+              "pos": 1,
+              "state": true,
+              "_mode": "all" | "multiple" | "single",
+              "_type": "gpio",
+            }
+          */
 
           if (_type.compare(common::CONFIG_CONTROL_TYPE_GPIO) == 0)
           {
@@ -231,6 +291,7 @@ void Mqtt::recieveMsg(void *arg)
 
               _data["state"] = state;
               _data["mode"] = ModeControl::ALL;
+              _data["ack"] = _ack;
 
               self->notify(self->_service, CentralServices::RELAY, new RecievePayload_2<RelayType, std::map<std::string, std::any>>(ServiceType::EVENT_CHANGE_STATE, _data));
             }
@@ -249,10 +310,21 @@ void Mqtt::recieveMsg(void *arg)
               _data["state"] = state;
               _data["pos"] = pos;
               _data["mode"] = ModeControl::SINGLE;
+              _data["ack"] = _ack;
 
               self->notify(self->_service, CentralServices::RELAY, new RecievePayload_2<RelayType, std::map<std::string, std::any>>(ServiceType::EVENT_CHANGE_STATE, _data));
             }
           }
+#ifdef CONFIG_MODE_NODE
+
+          /*
+            {
+              "state": true,
+              "force": false,
+              "_type": "buzzer",
+            }
+          */
+
           else if (_type.compare(common::CONFIG_CONTROL_TYPE_BUZZER) == 0)
           {
             const bool state = data.at("state").get<bool>();
@@ -266,6 +338,11 @@ void Mqtt::recieveMsg(void *arg)
               self->notify(self->_service, CentralServices::BUZZER, new RecievePayload_2<BuzzerType, nullptr_t>(ServiceType::EVENT_BUZZER_STOP, nullptr));
             }
           }
+#endif
+        }
+        /* handle message from topic config */
+        else if (_gb_channel_topic[ChannelMqtt::CHANNEL_CONFIG].compare(topic) == 0)
+        {
         }
       }
       catch (const std::exception &e)
@@ -286,7 +363,7 @@ void Mqtt::start(void)
     return;
   }
   ESP_LOGI(TAG, "Mqtt start");
-  xTaskCreate(&Mqtt::init, "init::Mqtt", 4 * 1024, this, 6, NULL);
+  xTaskCreateWithCaps(&Mqtt::init, "init::Mqtt", 4 * 1024, this, 6, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Mqtt::stop(void)
@@ -300,7 +377,7 @@ void Mqtt::stop(void)
   _eventGroupStop = (_eventGroupStop == nullptr) ? xEventGroupCreate() : _eventGroupStop;
 
   ESP_LOGI(TAG, "Mqtt stop");
-  xTaskCreate(&Mqtt::deinit, "deinit::Mqtt", 4 * 1024, this, 6, NULL);
+  xTaskCreateWithCaps(&Mqtt::deinit, "deinit::Mqtt", 4 * 1024, this, 6, NULL, MALLOC_CAP_SPIRAM);
 
   /* wait task done */
   xEventGroupWaitBits(_eventGroupStop, BIT_STOP, pdTRUE, pdFALSE, pdMS_TO_TICKS(5000)); // just 5s
@@ -351,7 +428,7 @@ void Mqtt::init(void *arg)
   }
 
   self->_isStarted = true;
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Mqtt::deinit(void *arg)
@@ -401,7 +478,7 @@ void Mqtt::deinit(void *arg)
   }
 
   self->_isStarted = false;
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Mqtt::onReceive(CentralServices s, void *data)

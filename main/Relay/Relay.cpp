@@ -1,6 +1,8 @@
 #include "Relay.hpp"
-
+#include "Cache.h"
 #include "Arduino.h"
+#include "Helper.hpp"
+#include "Mqtt.hpp"
 
 #include <iostream>
 #include <string>
@@ -12,56 +14,55 @@ using namespace ServiceType;
 
 static const char *TAG = "Relay";
 
-static const std::map<int, gpio_num_t> _map_gpio = {
-#ifdef CONFIG_MODE_GATEWAY
-    {0, GPIO_NUM_25},
-    {1, GPIO_NUM_26},
-    {2, GPIO_NUM_27},
-#elif CONFIG_MODE_NODE
-    {0, GPIO_NUM_25},
-#endif
-};
-
 void Relay::start(void)
 {
   ESP_LOGI(TAG, "Relay start");
-  xTaskCreate(&Relay::init, "Relay::init", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Relay::init, "Relay::init", 4 * 1024, this, 5, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Relay::stop(void)
 {
   ESP_LOGI(TAG, "Relay stop");
-  xTaskCreate(&Relay::deinit, "Relay::deinit", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Relay::deinit, "Relay::deinit", 4 * 1024, this, 5, NULL, MALLOC_CAP_SPIRAM);
 }
 
-void Relay::setStateRelay(gpio_num_t pin, bool state)
+void Relay::setStateRelay(int pin, bool state)
 {
-  digitalWrite(pin, state ? HIGH : LOW);
+  digitalWrite(common::CONFIG_GPIO_OUTPUT.at(pin).gpio, state ? HIGH : LOW);
+  /* set cache state */
+  if (cacheManager.output_state[pin] != state)
+  {
+    cacheManager.output_state[pin] = state;
+    /* storage nvs */
+    nvs_set_bool(common::CONFIG_GPIO_OUTPUT.at(pin).name, state);
+  }
 }
 
 void Relay::init(void *arg)
 {
   Relay *self = static_cast<Relay *>(arg);
 
-  /* setup gpio */
-  pinMode(GPIO_NUM_25, OUTPUT);
+  /* setup gpio output */
+  int index = 0;
+  for (auto it = common::CONFIG_GPIO_OUTPUT.begin(); it != common::CONFIG_GPIO_OUTPUT.end(); it++)
+  {
+    gpio_num_t pin = it->second.gpio;
+    pinMode(pin, OUTPUT);
+    if (digitalRead(pin) != cacheManager.output_state[index])
+    {
+      digitalWrite(pin, cacheManager.output_state[index]);
+    }
+    index++;
+  }
 
-  // while (true)
-  // {
-  //   digitalWrite(GPIO_NUM_27, HIGH);
-  //   vTaskDelay(500 / portTICK_PERIOD_MS);
-  //   digitalWrite(GPIO_NUM_27, LOW);
-  //   vTaskDelay(500 / portTICK_PERIOD_MS);
-  // }
-
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Relay::deinit(void *arg)
 {
   Relay *self = static_cast<Relay *>(arg);
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Relay::onReceive(CentralServices s, void *data)
@@ -79,6 +80,7 @@ void Relay::onReceive(CentralServices s, void *data)
 
       if (payload->type == EVENT_CHANGE_STATE)
       {
+        Mqtt *mqtt = static_cast<Mqtt *>(this->getObserver(CentralServices::MQTT));
         ModeControl mode = std::any_cast<ModeControl>(payload->data.at("mode"));
 
         if (mode == ModeControl::SINGLE)
@@ -86,7 +88,12 @@ void Relay::onReceive(CentralServices s, void *data)
           /* change state relay */
           int pos = std::any_cast<int>(payload->data.at("pos"));
           bool state = std::any_cast<bool>(payload->data.at("state"));
-          this->setStateRelay(_map_gpio.at(pos), state);
+          std::string ack = std::any_cast<std::string>(payload->data.at("ack"));
+
+          this->setStateRelay(pos, state);
+
+          /* send back ack */
+          mqtt->notifyAckPayload(ack);
         }
         else if (mode == ModeControl::MULTIPLE)
         {
@@ -94,11 +101,17 @@ void Relay::onReceive(CentralServices s, void *data)
         else if (mode == ModeControl::ALL)
         {
           bool state = std::any_cast<bool>(payload->data.at("state"));
+          std::string ack = std::any_cast<std::string>(payload->data.at("ack"));
 
-          for (auto it = _map_gpio.begin(); it != _map_gpio.end(); it++)
+          int index = 0;
+          for (auto it = common::CONFIG_GPIO_OUTPUT.begin(); it != common::CONFIG_GPIO_OUTPUT.end(); it++)
           {
-            this->setStateRelay(it->second, state);
+            this->setStateRelay(index, state);
+            index++;
           }
+
+          /* send back ack */
+          mqtt->notifyAckPayload(ack);
         }
       }
       delete payload;

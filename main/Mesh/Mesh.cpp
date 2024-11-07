@@ -4,6 +4,18 @@
 #include "Cache.h"
 #include "Helper.hpp"
 #include "Storage.hpp"
+#include "Button.hpp"
+#include "Led.hpp"
+
+#ifdef CONFIG_MODE_GATEWAY
+#include "Arduino.h"
+#include "esp_eth_netif_glue.h"
+#include "ethernet_init.h"
+#include "mesh_netif_eth.h"
+
+#elif CONFIG_MODE_NODE
+#include "mesh_netif.h"
+#endif
 
 #include <iostream>
 #include <string>
@@ -26,6 +38,12 @@ const std::string Mesh::password = "44448888";
 
 const std::string Mesh::ssid_2 = "Demo box";
 const std::string Mesh::password_2 = "demobox123";
+
+#ifdef CONFIG_MODE_GATEWAY
+
+esp_netif_t *gb_eth_netif = nullptr;
+
+#endif
 
 static const char *TAG = "Mesh";
 
@@ -63,31 +81,68 @@ void Mesh::transmitDemo(void *arg)
   vTaskDelete(NULL);
 }
 
+#ifdef CONFIG_MODE_GATEWAY
+
+void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
+                             int32_t event_id, void *event_data)
+{
+  Mesh *self = static_cast<Mesh *>(arg); // get instance
+
+  uint8_t mac_addr[6] = {0};
+  /* we can get the ethernet driver handle from event data */
+  esp_eth_handle_t eth_handle = *(esp_eth_handle_t *)event_data;
+  esp_netif_dhcp_status_t gb_eth_dhcpc_status;
+
+  switch (event_id)
+  {
+  case ETHERNET_EVENT_CONNECTED:
+  {
+    esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
+    esp_netif_dhcpc_get_status(gb_eth_netif, &gb_eth_dhcpc_status);
+
+    ESP_LOGI(TAG, "Ethernet Link Up");
+    ESP_LOGI(TAG, "Ethernet Link DHCP Status: %d", gb_eth_dhcpc_status);
+    ESP_LOGI(TAG, "Ethernet HW Addr " MACSTR, MAC2STR(mac_addr));
+
+    break;
+  }
+
+  case ETHERNET_EVENT_DISCONNECTED:
+  {
+    cacheManager.ip = ""; // reset ip
+    ESP_LOGI(TAG, "Ethernet Link Down");
+    break;
+  }
+
+  case ETHERNET_EVENT_START:
+    ESP_LOGI(TAG, "Ethernet Started");
+    break;
+
+  case ETHERNET_EVENT_STOP:
+    ESP_LOGI(TAG, "Ethernet Stopped");
+    break;
+
+  default:
+    break;
+  }
+}
+
+#endif
+
 void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
                             int32_t event_id, void *event_data)
 {
   Mesh *self = static_cast<Mesh *>(arg); // get instance
-
-  /* get api instance */
-  ApiCaller *api = static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
   Sntp *sntp = static_cast<Sntp *>(self->getObserver(CentralServices::SNTP));
+  ApiCaller *api = static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
 
   ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-  ESP_LOGI(TAG, "<IP_EVENT_STA_GOT_IP>IP:" IPSTR, IP2STR(&event->ip_info.ip));
-  self->currentIp.addr = event->ip_info.ip.addr;
-
   esp_netif_t *netif = event->esp_netif;
   esp_netif_dns_info_t dns;
+
   ESP_ERROR_CHECK(esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns));
-  mesh_netif_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
 
-  cacheManager.ip = ip4ToString(event->ip_info.ip);
-  cacheManager.netmask = ip4ToString(event->ip_info.netmask);
-  cacheManager.gateway = ip4ToString(event->ip_info.gw);
-
-  /* save wifi config */
-  Storage storage;
-  storage.saveWifiConfig();
+  self->currentIp.addr = event->ip_info.ip.addr;
 
   /* ignore if state api is creating device */
   if (api->isCallingCreateDevice() == false)
@@ -96,11 +151,47 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
     self->notify(self->_service, CentralServices::MQTT, new RecievePayload_2<MqttEventType, nullptr_t>(MqttEventType::EVENT_MQTT_START, nullptr));
   }
 
+#ifdef CONFIG_MODE_GATEWAY
+
+  const esp_netif_ip_info_t *ip_info = &event->ip_info;
+
+  esp_netif_t *_netif = esp_netif_get_default_netif();
+  const char *_desc = esp_netif_get_desc(_netif);
+
+  ESP_LOGI(TAG, "Ethernet Got IP Address");
+  ESP_LOGI(TAG, "~~~~~~~~~~~");
+  ESP_LOGW(TAG, "Interface: %s", _desc);
+  ESP_LOGI(TAG, "IP: " IPSTR, IP2STR(&ip_info->ip));
+  ESP_LOGI(TAG, "MASK: " IPSTR, IP2STR(&ip_info->netmask));
+  ESP_LOGI(TAG, "GW: " IPSTR, IP2STR(&ip_info->gw));
+  ESP_LOGI(TAG, "~~~~~~~~~~~");
+
+  // mesh_netifs_eth_start(esp_mesh_is_root());
+  // esp_mesh_post_toDS_state(true);
+
+  mesh_netif_eth_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
+
+#elif CONFIG_MODE_NODE
+
+  ESP_LOGI(TAG, "<IP_EVENT_STA_GOT_IP>IP:" IPSTR, IP2STR(&event->ip_info.ip));
+
+  mesh_netif_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
+
   if (cacheManager.activeToken.length() > 0)
   {
     /* add device to server */
     self->notify(self->_service, CentralServices::API_CALLER, new RecievePayload_2<ApiCallerType, nullptr_t>(ApiCallerType::EVENT_API_CALLER_ADD_DEVICE, nullptr));
   }
+
+#endif
+
+  cacheManager.ip = ip4ToString(event->ip_info.ip);
+  cacheManager.netmask = ip4ToString(event->ip_info.netmask);
+  cacheManager.gateway = ip4ToString(event->ip_info.gw);
+
+  /* save wifi config */
+  Storage storage;
+  storage.saveWifiConfig();
 
   /* start SNTP service */
   if (sntp->sntpState() == false)
@@ -128,6 +219,9 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "<MESH_EVENT_MESH_STARTED>ID:" MACSTR "", MAC2STR(self->meshAddress.addr));
     self->_isNativeStart = true;
     self->layer = esp_mesh_get_layer();
+
+    /* start led notify mesh running */
+    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_LOOP_2DUP_SIGNAL));
     break;
   }
   case MESH_EVENT_STOPPED:
@@ -135,6 +229,9 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "<MESH_EVENT_STOPPED>");
     self->layer = esp_mesh_get_layer();
     self->_isNativeStart = false;
+
+    /* stop led notify mesh running */
+    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
     break;
   }
   case MESH_EVENT_CHILD_CONNECTED:
@@ -190,7 +287,10 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
              MAC2STR(self->meshAddress.addr));
     self->lastLayer = self->layer;
     self->_isParentConnected = true;
+
+#ifdef CONFIG_MODE_NODE
     mesh_netifs_start(esp_mesh_is_root());
+#endif
 
     /* start task sending demo */
     // if (esp_mesh_is_root() == false)
@@ -207,7 +307,10 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
              disconnected->reason);
     self->_isParentConnected = false;
     self->layer = esp_mesh_get_layer();
+
+#ifdef CONFIG_MODE_NODE
     mesh_netifs_stop(false);
+#endif
 
     /* clear task sending demo */
     // if (_taskTxDemo != nullptr)
@@ -440,6 +543,11 @@ void Mesh::recieveMsg(void *arg)
 
 void Mesh::start(void)
 {
+  // if (_condition_state[CentralServices::BUTTON] == false || _condition_state[CentralServices::STORAGE] == false)
+  // {
+  //   ESP_LOGW(TAG, "Condition not ready");
+  //   return;
+  // }
   if (this->_isStarted)
   {
     ESP_LOGW(TAG, "Mesh already started");
@@ -485,7 +593,15 @@ void Mesh::initWiFiNative(void)
 
   wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&config));
+
+  // #ifdef CONFIG_MODE_GATEWAY
+  //   esp_wifi_set_mode(WIFI_MODE_STA);
+  // #endif
+
+#ifdef CONFIG_MODE_NODE
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Mesh::ip_event_handler, this));
+#endif
+
   ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_FLASH));
   ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
@@ -523,15 +639,18 @@ void Mesh::initMeshNative(void)
   ESP_ERROR_CHECK(esp_mesh_set_ap_assoc_expire(10));
   mesh_cfg_t cfg = MESH_INIT_CONFIG_DEFAULT();
 
-  cfg.allow_channel_switch = true;
   cfg.crypto_funcs = NULL;
 
   /* router */
   memcpy((uint8_t *)&cfg.mesh_id, this->meshId, 6);
+
+  // #ifdef CONFIG_MODE_NODE
+  cfg.allow_channel_switch = true;
   cfg.router.ssid_len = cacheManager.ssid.length();
   cfg.router.allow_router_switch = true;
   memcpy((uint8_t *)&cfg.router.ssid, cacheManager.ssid.c_str(), cfg.router.ssid_len);
   memcpy((uint8_t *)&cfg.router.password, cacheManager.password.c_str(), cacheManager.password.length());
+  // #endif
 
   /* mesh softAP */
   ESP_ERROR_CHECK(esp_mesh_set_ap_authmode(WIFI_AUTH_WPA2_PSK));
@@ -539,7 +658,7 @@ void Mesh::initMeshNative(void)
   cfg.mesh_ap.nonmesh_max_connection = 0;
   memcpy((uint8_t *)&cfg.mesh_ap.password, this->meshPassword.c_str(), this->meshPassword.length());
   ESP_ERROR_CHECK(esp_mesh_set_config(&cfg));
-  
+
 #ifdef CONFIG_MODE_GATEWAY
   esp_mesh_set_type(MESH_ROOT);
 #endif
@@ -558,11 +677,64 @@ void Mesh::deinitMeshNative(void)
   ESP_ERROR_CHECK(esp_event_handler_unregister(MESH_EVENT, ESP_EVENT_ANY_ID, &Mesh::mesh_event_handler));
   ESP_ERROR_CHECK(esp_mesh_stop());
   ESP_ERROR_CHECK(esp_mesh_deinit());
+
+#ifdef CONFIG_MODE_NODE
   ESP_ERROR_CHECK(mesh_netifs_stop(true));
   ESP_ERROR_CHECK(mesh_netifs_destroy());
+#endif
 
   this->_isStartBaseMesh = false;
 }
+
+#ifdef CONFIG_MODE_GATEWAY
+
+void Mesh::startEthernet(void)
+{
+
+  if (this->_isStartEthernet)
+  {
+    return;
+  }
+
+  uint8_t eth_port_cnt = 0;
+  esp_eth_handle_t *eth_handles;
+  char if_key_str[10];
+  char if_desc_str[10];
+
+  // Initialize Ethernet driver
+  while (ethernet_init_all(&eth_handles, &eth_port_cnt) != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Ethernet initialization failed, retrying...");
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
+  }
+
+  // Attach Ethernet driver to TCP/IP stack
+  ESP_ERROR_CHECK(esp_netif_attach(gb_eth_netif, esp_eth_new_netif_glue(eth_handles[0])));
+
+  // Register user defined event handers
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &Mesh::ip_event_handler, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &Mesh::eth_event_handler, this));
+
+  ESP_ERROR_CHECK(esp_eth_start(eth_handles[0]));
+
+  eth_dev_info_t info = ethernet_init_get_dev_info(&eth_handles[0]);
+  if (info.type == ETH_DEV_TYPE_INTERNAL_ETH)
+  {
+    ESP_LOGI(TAG, "Device Name: %s", info.name);
+    ESP_LOGI(TAG, "Device type: ETH_DEV_TYPE_INTERNAL_ETH(%d)", info.type);
+    ESP_LOGI(TAG, "Pins: mdc: %d, mdio: %d", info.pin.eth_internal_mdc, info.pin.eth_internal_mdio);
+  }
+  else if (info.type == ETH_DEV_TYPE_SPI)
+  {
+    ESP_LOGI(TAG, "Device Name: %s", info.name);
+    ESP_LOGI(TAG, "Device type: ETH_DEV_TYPE_SPI(%d)", info.type);
+    ESP_LOGI(TAG, "Pins: cs: %d, intr: %d", info.pin.eth_spi_cs, info.pin.eth_spi_int);
+  }
+
+  this->_isStartEthernet = true;
+}
+
+#endif
 
 void Mesh::startWiFi(void)
 {
@@ -606,13 +778,18 @@ void Mesh::startBase(void)
 
   if (_taskRecieveMsg == nullptr)
   {
-    xTaskCreate(&this->recieveMsg, "recieveMsg", 4 * 1024, this, 5, &_taskRecieveMsg);
+    xTaskCreateWithCaps(&this->recieveMsg, "recieveMsg", 4 * 1024, this, 5, &_taskRecieveMsg, MALLOC_CAP_SPIRAM);
   }
 
   // if (this->_isStartNetIF == false)
   // {
   /*  crete network interfaces for mesh (only station instance saved for further manipulation, soft AP instance ignored */
+
+#ifdef CONFIG_MODE_GATEWAY
+  gb_eth_netif = mesh_netifs_eth_init(this->callbackData);
+#elif CONFIG_MODE_NODE
   mesh_netifs_init(this->callbackData);
+#endif
   //   this->_isStartNetIF = true;
   // }
 
@@ -633,7 +810,7 @@ void Mesh::deinitBase(void)
 
   if (_taskRecieveMsg != nullptr)
   {
-    vTaskDelete(_taskRecieveMsg);
+    vTaskDeleteWithCaps(_taskRecieveMsg);
     _taskRecieveMsg = nullptr;
   }
 
@@ -647,6 +824,11 @@ void Mesh::init(void *arg)
 
   /* start setup default startup */
   self->startBase();
+
+#ifdef CONFIG_MODE_GATEWAY
+  /* ethernet initialization */
+  self->startEthernet();
+#endif
 
   if (cacheManager.ssid.length() == 0)
   {
@@ -662,6 +844,7 @@ void Mesh::init(void *arg)
   self->startMesh();
 
   self->_isStarted = true; // start service
+
   vTaskDelete(NULL);
 }
 

@@ -40,6 +40,8 @@ public:
   void stop(void);
   bool isStarted(void);
   int sendMessage(ChannelMqtt chanel, std::string msg);
+  bool isConnected(void);
+  void notifyAckPayload(std::string ack);
 
 private:
   void onConnected(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
@@ -49,6 +51,7 @@ private:
   static void notifySyncThresholdTrigger(void *arg);
   static void notifyDeviceCreated(void *arg);
   static void recieveMsg(void *arg);
+  static void notifySyncGpio(void *arg);
   static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 
   bool _isStarted = false;

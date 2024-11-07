@@ -30,7 +30,7 @@ public:
   void onReceive(CentralServices s, void *data) override;
   void start(void);
   void stop(void);
-  void setStateRelay(gpio_num_t pin, bool state);
+  void setStateRelay(int pin, bool state);
 
 private:
   static void init(void *arg);

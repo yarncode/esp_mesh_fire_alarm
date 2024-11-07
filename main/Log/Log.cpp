@@ -22,23 +22,28 @@ void Log::init(void *arg)
   Log *self = static_cast<Log *>(arg);
   Mesh *mesh = static_cast<Mesh *>(self->getObserver(CentralServices::MESH));
 
+  mesh_addr_t mac_parent;
+
   while (true)
   {
     self->heapSize = esp_get_free_heap_size();
+    esp_mesh_get_parent_bssid(&mac_parent);
 
     /* log for esp native */
-    ESP_LOGI(TAG, "[ *** RAM Monitor *** ]");
-    ESP_LOGI(TAG, "| Free heap size: %" PRIu32 " (bytes)", self->heapSize);
+    // ESP_LOGI(TAG, "[ *** RAM Monitor *** ]");
+    // ESP_LOGI(TAG, "| Free heap size: %" PRIu32 " (bytes)", self->heapSize);
 
-    /* log for mesh info */
-    ESP_LOGI(TAG, "| [*** Mesh Monitor ***]");
-    ESP_LOGI(TAG, "| Layer: %d", mesh->layer);
-    ESP_LOGI(TAG, "| Parent MAC: " MACSTR, MAC2STR(mesh->parentAddress.addr));
-    ESP_LOGI(TAG, "| Parent IP: " IPSTR, IP2STR(&mesh->parentAddress.mip.ip4));
-    ESP_LOGI(TAG, "| Parent Port: %" PRId16, mesh->parentAddress.mip.port);
-    ESP_LOGI(TAG, "| Node MAC: " MACSTR, MAC2STR(mesh->meshAddress.addr));
-    ESP_LOGI(TAG, "| Node IP: " IPSTR, IP2STR(&mesh->currentIp));
-    ESP_LOGI(TAG, "[ Node Port: %" PRId16, mesh->meshAddress.mip.port);
+    // /* log for mesh info */
+    // ESP_LOGI(TAG, "| [*** Mesh Monitor ***]");
+    // ESP_LOGI(TAG, "| Layer: %d", mesh->layer);
+    // ESP_LOGI(TAG, "| Parent MAC: " MACSTR, MAC2STR(mesh->parentAddress.addr));
+    // ESP_LOGI(TAG, "| Parent IP: " IPSTR, IP2STR(&mesh->parentAddress.mip.ip4));
+    // ESP_LOGI(TAG, "| Parent Port: %" PRId16, mesh->parentAddress.mip.port);
+    // ESP_LOGI(TAG, "| Node MAC: " MACSTR, MAC2STR(mesh->meshAddress.addr));
+    // ESP_LOGI(TAG, "| Node IP: " IPSTR, IP2STR(&mesh->currentIp));
+    // ESP_LOGI(TAG, "[ Node Port: %" PRId16, mesh->meshAddress.mip.port);
+    /* log just one line */
+    ESP_LOGI(TAG, "heap: %" PRIu32 " (bytes), layer: %d, parent: " MACSTR ", ip: " IPSTR " num childs: %d", self->heapSize, esp_mesh_get_layer(), MAC2STR(mac_parent.addr), IP2STR(&mesh->currentIp), esp_mesh_get_routing_table_size() - 1);
 
     vTaskDelay(10 * 1000 / portTICK_PERIOD_MS); // log every 10 seconds
   }

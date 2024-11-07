@@ -42,6 +42,12 @@ public:
   std::vector<int> thresholds_temp;
   std::vector<int> thresholds_humi;
   std::vector<int> thresholds_smoke;
+
+  /* input state */
+  std::map<int, bool> input_state;
+
+  /* output state */
+  std::map<int, bool> output_state;
 };
 
 extern Cache cacheManager;

@@ -3,8 +3,8 @@
 // LCD module defines
 #define LCD_LINEONE 0x00   // start of line 1
 #define LCD_LINETWO 0x40   // start of line 2
-#define LCD_LINETHREE 0x14 // start of line 3
-#define LCD_LINEFOUR 0x54  // start of line 4
+#define LCD_LINETHREE 0x10 // start of line 3
+#define LCD_LINEFOUR 0x50  // start of line 4
 
 #define LCD_BACKLIGHT 0x08
 #define LCD_ENABLE 0x04

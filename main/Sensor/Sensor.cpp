@@ -2,13 +2,14 @@
 #include "Cache.h"
 #include "Buzzer.hpp"
 
-#include "driver_sht31.h"
 #include "MQSensor.h"
+#include "sht31.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
+#include <cmath>
 
 #include "nlohmann/json.hpp"
 
@@ -21,33 +22,46 @@ static const char *TAG = "Sensor";
 static TaskHandle_t _taskSampleValue = NULL;
 
 /* sht31 */
+
+/* mq2 */
 MQUnifiedsensor MQ2("ESP32", 5, 12, GPIO_NUM_34, "MQ-2");
 
 void Sensor::sampleValue(void *arg)
 {
   Sensor *self = static_cast<Sensor *>(arg);
   Buzzer *buzzer = static_cast<Buzzer *>(self->getObserver(CentralServices::BUZZER));
-  uint8_t random;
-  float temperature, humidity, smoke;
+  float temperature, humidity;
+  double smoke;
   json body;
   bool flag_warning = false;
+  time_t time_now;
+  time_t time_last = 0;
 
   while (true)
   {
+    /* reset state warning */
+    flag_warning = false;
+
     /* update data sensor MQ2 */
     MQ2.update();
-    sht31_read_temp_humi(&temperature, &humidity);
 
-    /* get random */
-    random = esp_random();
+    /* get temperature and humidity from sht31 */
+    sht31_readTempHum();
+
+    humidity = sht31_readHumidity();
+    temperature = sht31_readTemperature();
+
+    time_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
     /* get smoke from data */
     smoke = MQ2.readSensor();
 
-    body["_ck"] = "_none";
-    body["smoke"] = smoke;
-    body["temperature"] = temperature;
-    body["humidity"] = humidity;
+    body["smoke"] = std::isnan(smoke) || std::isinf(smoke) ? 0.0 : std::ceil(smoke * 100.0) / 100.0;
+    body["temperature"] = std::isnan(temperature) ? 0.0 : std::ceil(temperature * 100.0) / 100.0;
+    body["humidity"] = std::isnan(humidity) ? 0.0 : std::ceil(humidity * 100.0) / 100.0;
 
+    /* log temp, humi, smoke */
+    // ESP_LOGI(TAG, "Sensor sampleValue: %f, %f, %f", temperature, humidity, smoke);
     ESP_LOGI(TAG, "Sensor sampleValue: %s", body.dump(2).c_str());
 
     self->notify(self->_service, CentralServices::MQTT, new RecievePayload_2<SensorType, std::string>(SENSOR_SEND_SAMPLE_DATA, body.dump()));
@@ -65,9 +79,11 @@ void Sensor::sampleValue(void *arg)
 
     if (flag_warning)
     {
-      if (buzzer->stateWarning() == false)
+      /* debounce for 10 seconds */
+      if (buzzer->stateWarning() == false && time_now - time_last > 10)
       {
         buzzer->startWarning();
+        time_last = time_now;
       }
     }
     else
@@ -83,19 +99,19 @@ void Sensor::sampleValue(void *arg)
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Sensor::start(void)
 {
   ESP_LOGI(TAG, "Sensor start");
-  xTaskCreate(&Sensor::init, "Sensor::init", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Sensor::init, "Sensor::init", 4 * 1024, this, 5, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Sensor::stop(void)
 {
   ESP_LOGI(TAG, "Sensor stop");
-  xTaskCreate(&Sensor::deinit, "Sensor::deinit", 4 * 1024, this, 5, NULL);
+  xTaskCreateWithCaps(&Sensor::deinit, "Sensor::deinit", 4 * 1024, this, 5, NULL, MALLOC_CAP_SPIRAM);
 }
 
 void Sensor::init(void *arg)
@@ -109,6 +125,17 @@ void Sensor::init(void *arg)
   MQ2.setRL(1);
   MQ2.init();
 
+  /* setup gpio input */
+  int index = 0;
+  for (auto it = common::CONFIG_GPIO_INPUT.begin(); it != common::CONFIG_GPIO_INPUT.end(); it++)
+  {
+    gpio_num_t pin = it->second.gpio;
+    pinMode(pin, INPUT);
+    cacheManager.input_state[index] = digitalRead(pin);
+    index++;
+  }
+
+  /* Initialize sht31 */
   sht31_init();
 
   /* Start calibrate */
@@ -123,9 +150,9 @@ void Sensor::init(void *arg)
   ESP_LOGI(TAG, "Calibrate done.");
 
   ESP_LOGI(TAG, "Sensor init");
-  xTaskCreate(&Sensor::sampleValue, "Sensor::sampleValue", 4 * 1024, self, 5, &_taskSampleValue);
+  xTaskCreateWithCaps(&Sensor::sampleValue, "Sensor::sampleValue", 4 * 1024, self, 5, &_taskSampleValue, MALLOC_CAP_SPIRAM);
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Sensor::deinit(void *arg)
@@ -136,11 +163,11 @@ void Sensor::deinit(void *arg)
 
   if (_taskSampleValue != NULL)
   {
-    vTaskDelete(_taskSampleValue);
+    vTaskDeleteWithCaps(_taskSampleValue);
     _taskSampleValue = NULL;
   }
 
-  vTaskDelete(NULL);
+  vTaskDeleteWithCaps(NULL);
 }
 
 void Sensor::onReceive(CentralServices s, void *data)

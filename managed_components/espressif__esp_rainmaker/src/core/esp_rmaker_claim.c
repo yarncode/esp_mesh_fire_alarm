@@ -40,11 +40,6 @@
 #include <esp_rmaker_factory.h>
 #include <esp_rmaker_utils.h>
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
-#include <network_provisioning/manager.h>
-#else
-#include <wifi_provisioning/manager.h>
-#endif
 #include <esp_event.h>
 #include <esp_tls.h>
 #include <esp_rmaker_core.h>
@@ -59,6 +54,12 @@
 #include "esp_rmaker_internal.h"
 #include "esp_rmaker_client_data.h"
 #include "esp_rmaker_claim.h"
+
+#if RMAKER_USING_NETWORK_PROV
+#include <network_provisioning/manager.h>
+#else
+#include <wifi_provisioning/manager.h>
+#endif
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
 // Features supported in 4.4+
@@ -252,17 +253,26 @@ static esp_err_t handle_claim_verify_response(esp_rmaker_claim_data_t *claim_dat
         int required_len = 0;
         if (json_obj_get_strlen(&jctx, "certificate", &required_len) == 0) {
             required_len++; /* For NULL termination */
-            char *certificate =  MEM_CALLOC_EXTRAM(1, required_len);
-            if (!certificate) {
+            char *value_buf =  MEM_CALLOC_EXTRAM(1, required_len);
+            if (!value_buf) {
                 json_parse_end(&jctx);
                 ESP_LOGE(TAG, "Failed to allocate %d bytes for certificate.", required_len);
                 return ESP_ERR_NO_MEM;
             }
-            json_obj_get_string(&jctx, "certificate", certificate, required_len);
+            /* Just using the certificate buffer itself (which is expected to be large enough) to
+             * check if the claiming service has also sent an MQTT Host, before going on to read
+             * the certificate itself.
+             */
+            if (json_obj_get_string(&jctx, "mqtt_host", value_buf, required_len) == 0) {
+                ESP_LOGI(TAG, "Storing received MQTT Host: %s", value_buf);
+                esp_rmaker_factory_set(ESP_RMAKER_MQTT_HOST_NVS_KEY, value_buf, strlen(value_buf));
+                memset(value_buf, 0, required_len);
+            }
+            json_obj_get_string(&jctx, "certificate", value_buf, required_len);
             json_parse_end(&jctx);
-            unescape_new_line(certificate);
-            esp_err_t err = esp_rmaker_factory_set(ESP_RMAKER_CLIENT_CERT_NVS_KEY, certificate, strlen(certificate));
-            free(certificate);
+            unescape_new_line(value_buf);
+            esp_err_t err = esp_rmaker_factory_set(ESP_RMAKER_CLIENT_CERT_NVS_KEY, value_buf, strlen(value_buf));
+            free(value_buf);
             return err;
         } else {
             ESP_LOGE(TAG, "Claim Verify Response invalid.");
@@ -579,6 +589,7 @@ static esp_err_t handle_assisted_claim_init_response(esp_rmaker_claim_data_t *cl
             json_gen_str_start(&jstr, claim_data->payload, sizeof(claim_data->payload), NULL, NULL);
             json_gen_start_object(&jstr);
             json_gen_obj_set_string(&jstr, "csr", (char *)claim_data->csr);
+            json_gen_obj_set_bool(&jstr, "send_mqtt_host", true);
             json_gen_end_object(&jstr);
             json_gen_str_end(&jstr);
             claim_data->payload_len = strlen(claim_data->payload);
@@ -817,7 +828,7 @@ esp_err_t esp_rmaker_claiming_handler(uint32_t session_id, const uint8_t *inbuf,
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int32_t event_id, void* event_data)
 {
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
+#if RMAKER_USING_NETWORK_PROV
     if (event_base == NETWORK_PROV_EVENT) {
         switch (event_id) {
             case NETWORK_PROV_INIT: {
@@ -857,7 +868,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                 break;
         }
     }
-#endif
+#endif /* RMAKER_USING_NETWORK_PROV */
 }
 #endif /* CONFIG_ESP_RMAKER_ASSISTED_CLAIM */
 esp_err_t __esp_rmaker_claim_init(esp_rmaker_claim_data_t *claim_data)
@@ -1001,7 +1012,7 @@ esp_err_t esp_rmaker_assisted_claim_perform(esp_rmaker_claim_data_t *claim_data)
     if (claim_data->state == RMAKER_CLAIM_STATE_VERIFY_DONE) {
         err = ESP_OK;
     }
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
+#if RMAKER_USING_NETWORK_PROV
     esp_event_handler_unregister(NETWORK_PROV_EVENT, NETWORK_PROV_INIT, &event_handler);
     esp_event_handler_unregister(NETWORK_PROV_EVENT, NETWORK_PROV_START, &event_handler);
 #else
@@ -1017,7 +1028,7 @@ esp_rmaker_claim_data_t *esp_rmaker_assisted_claim_init(void)
     ESP_LOGI(TAG, "Initialising Assisted Claiming. This may take time.");
     esp_rmaker_claim_data_t *claim_data = esp_rmaker_claim_init();
     if (claim_data) {
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
+#if RMAKER_USING_NETWORK_PROV
         esp_event_handler_register(NETWORK_PROV_EVENT, NETWORK_PROV_INIT, &event_handler, claim_data);
         esp_event_handler_register(NETWORK_PROV_EVENT, NETWORK_PROV_START, &event_handler, claim_data);
 #else
