@@ -20,12 +20,17 @@
 
 enum ChannelMqtt
 {
+  /* receive channel */
   CHANNEL_DATA,
   CHANNEL_CONTROL,
   CHANNEL_NOTIFY,
   CHANNEL_CONFIG,
   CHANNEL_SENSOR,
   CHANNEL_ACTIVE,
+
+  /* send channel */
+  CHANNEL_IO_OUTPUT,
+  CHANNEL_IO_INPUT,
 };
 
 class Mqtt : public Observer

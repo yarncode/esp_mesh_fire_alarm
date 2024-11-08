@@ -122,7 +122,7 @@ void Sensor::init(void *arg)
   /* Configure the equation to to calculate LPG concentration */
   MQ2.setA(987.99);
   MQ2.setB(-2.162);
-  MQ2.setRL(1);
+  // MQ2.setRL(1);
   MQ2.init();
 
   /* setup gpio input */

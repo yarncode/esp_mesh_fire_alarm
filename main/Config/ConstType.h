@@ -97,6 +97,9 @@ namespace common
   static const std::string CONFIG_NOTIFY_SYNC_GPIO = "sync_gpio";
   static const std::string CONFIG_NOTIFY_ACK_PAYLOAD = "ack_payload";
 
+  static const std::string CONFIG_KEY_INPUT = "input";
+  static const std::string CONFIG_KEY_OUTPUT = "output";
+  
   static const std::string CONFIG_CONTROL_TYPE_GPIO = "gpio";
   static const std::string CONFIG_CONTROL_TYPE_BUZZER = "buzzer";
 

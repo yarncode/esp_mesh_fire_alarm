@@ -35,6 +35,8 @@ static std::map<ChannelMqtt, std::string> _gb_channel_topic = {
     {ChannelMqtt::CHANNEL_NOTIFY, "/notify"},
     {ChannelMqtt::CHANNEL_SENSOR, "/sensor"},
     {ChannelMqtt::CHANNEL_ACTIVE, "/active"},
+    {ChannelMqtt::CHANNEL_IO_INPUT, "/input-io"},
+    {ChannelMqtt::CHANNEL_IO_OUTPUT, "/output-io"},
 };
 
 bool Mqtt::isConnected(void)
@@ -267,7 +269,7 @@ void Mqtt::recieveMsg(void *arg)
         /* handle message from topic control */
         if (_gb_channel_topic[ChannelMqtt::CHANNEL_CONTROL].compare(topic) == 0)
         {
-          std::string _type = data.at("_type").get<std::string>();
+          std::string _type = data.at("type").get<std::string>();
           std::string _ack = data.at("_ack").get<std::string>();
 
           /*
@@ -279,9 +281,9 @@ void Mqtt::recieveMsg(void *arg)
             }
           */
 
-          if (_type.compare(common::CONFIG_CONTROL_TYPE_GPIO) == 0)
+          if (_type.compare(common::CONFIG_KEY_OUTPUT) == 0)
           {
-            std::string _mode = data.at("_mode").get<std::string>();
+            std::string _mode = data.at("mode").get<std::string>();
 
             if (_mode.compare(common::CONFIG_CONTROL_MODE_ALL_GPIO) == 0)
             {
@@ -291,9 +293,10 @@ void Mqtt::recieveMsg(void *arg)
 
               _data["state"] = state;
               _data["mode"] = ModeControl::ALL;
-              _data["ack"] = _ack;
 
               self->notify(self->_service, CentralServices::RELAY, new RecievePayload_2<RelayType, std::map<std::string, std::any>>(ServiceType::EVENT_CHANGE_STATE, _data));
+              /* ack again */
+              self->sendMessage(ChannelMqtt::CHANNEL_IO_OUTPUT, data.dump());
             }
             else if (_mode.compare(common::CONFIG_CONTROL_MODE_MULTIPLE_GPIO) == 0)
             {
@@ -310,9 +313,10 @@ void Mqtt::recieveMsg(void *arg)
               _data["state"] = state;
               _data["pos"] = pos;
               _data["mode"] = ModeControl::SINGLE;
-              _data["ack"] = _ack;
 
               self->notify(self->_service, CentralServices::RELAY, new RecievePayload_2<RelayType, std::map<std::string, std::any>>(ServiceType::EVENT_CHANGE_STATE, _data));
+              /* ack again */
+              self->sendMessage(ChannelMqtt::CHANNEL_IO_OUTPUT, data.dump());
             }
           }
 #ifdef CONFIG_MODE_NODE

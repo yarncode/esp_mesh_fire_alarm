@@ -57,15 +57,17 @@ extern "C" void app_main(void)
     mesh.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
     button.registerTwoWayObserver(&ble, CentralServices::BLUETOOTH);
     button.registerTwoWayObserver(&mesh, CentralServices::MESH);
-    logger.registerObserver(&mesh, CentralServices::MESH);
     ble.registerTwoWayObserver(&mesh, CentralServices::MESH);
     ble.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
-    screen.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
     api.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
     ble.registerTwoWayObserver(&api, CentralServices::API_CALLER);
     mesh.registerTwoWayObserver(&api, CentralServices::API_CALLER);
     mesh.registerTwoWayObserver(&sntp, CentralServices::SNTP);
     mqtt.registerTwoWayObserver(&relay, CentralServices::RELAY);
+
+#ifdef CONFIG_MODE_GATEWAY
+    screen.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
+#endif
 
 #ifdef CONFIG_MODE_NODE
     mqtt.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
@@ -74,6 +76,7 @@ extern "C" void app_main(void)
 #endif
 
     mesh.registerObserver(&led, CentralServices::LED);
+    logger.registerObserver(&mesh, CentralServices::MESH);
     button.registerObserver(&led, CentralServices::LED);
     ble.registerObserver(&led, CentralServices::LED);
     mqtt.registerObserver(&factory, CentralServices::REFACTOR);

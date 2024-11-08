@@ -88,12 +88,8 @@ void Relay::onReceive(CentralServices s, void *data)
           /* change state relay */
           int pos = std::any_cast<int>(payload->data.at("pos"));
           bool state = std::any_cast<bool>(payload->data.at("state"));
-          std::string ack = std::any_cast<std::string>(payload->data.at("ack"));
 
           this->setStateRelay(pos, state);
-
-          /* send back ack */
-          mqtt->notifyAckPayload(ack);
         }
         else if (mode == ModeControl::MULTIPLE)
         {
@@ -101,7 +97,6 @@ void Relay::onReceive(CentralServices s, void *data)
         else if (mode == ModeControl::ALL)
         {
           bool state = std::any_cast<bool>(payload->data.at("state"));
-          std::string ack = std::any_cast<std::string>(payload->data.at("ack"));
 
           int index = 0;
           for (auto it = common::CONFIG_GPIO_OUTPUT.begin(); it != common::CONFIG_GPIO_OUTPUT.end(); it++)
@@ -109,9 +104,6 @@ void Relay::onReceive(CentralServices s, void *data)
             this->setStateRelay(index, state);
             index++;
           }
-
-          /* send back ack */
-          mqtt->notifyAckPayload(ack);
         }
       }
       delete payload;
