@@ -24,7 +24,7 @@ static TaskHandle_t _taskSampleValue = NULL;
 /* sht31 */
 
 /* mq2 */
-MQUnifiedsensor MQ2("ESP32", 5, 12, GPIO_NUM_34, "MQ-2");
+MQUnifiedsensor MQ2("ESP32", 3.3, 12, GPIO_NUM_34, "MQ-2");
 
 void Sensor::sampleValue(void *arg)
 {
@@ -120,9 +120,9 @@ void Sensor::init(void *arg)
 
   MQ2.setRegressionMethod(1); //_PPM =  a*ratio^b
   /* Configure the equation to to calculate LPG concentration */
-  MQ2.setA(987.99);
-  MQ2.setB(-2.162);
-  // MQ2.setRL(1);
+  MQ2.setA(30000000);
+  MQ2.setB(-8.308);
+  MQ2.setRL(1);
   MQ2.init();
 
   /* setup gpio input */

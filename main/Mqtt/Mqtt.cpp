@@ -121,9 +121,8 @@ void Mqtt::onConnected(void *handler_args, esp_event_base_t base, int32_t event_
     api->setCacheApiCallRecently(false);
   }
 
+  // xTaskCreateWithCaps(&Mqtt::notifySyncThresholdTrigger, "notifySyncThresholdTrigger", 4 * 1024, self, 6, NULL, MALLOC_CAP_SPIRAM);
   xTaskCreateWithCaps(&Mqtt::notifyDeviceCreated, "notifyDeviceCreated", 4 * 1024, self, 5, NULL, MALLOC_CAP_SPIRAM);
-
-  xTaskCreateWithCaps(&Mqtt::notifySyncThresholdTrigger, "notifySyncThresholdTrigger", 4 * 1024, self, 6, NULL, MALLOC_CAP_SPIRAM);
   xTaskCreateWithCaps(&Mqtt::notifySyncGpio, "notifySyncGpio", 4 * 1024, self, 7, NULL, MALLOC_CAP_SPIRAM);
 }
 
@@ -347,6 +346,19 @@ void Mqtt::recieveMsg(void *arg)
         /* handle message from topic config */
         else if (_gb_channel_topic[ChannelMqtt::CHANNEL_CONFIG].compare(topic) == 0)
         {
+          std::string _code = data.at("code").get<std::string>();
+
+#ifdef CONFIG_MODE_NODE
+          if (_code.compare(common::CONFIG_NOTIFY_SYNC_THRESHOLD) == 0)
+          {
+            cacheManager.thresholds_temp[0] = data["data"]["threshold"]["temperature"]["start"].get<int>();
+            cacheManager.thresholds_humi[0] = data["data"]["threshold"]["humidity"]["start"].get<int>();
+            cacheManager.thresholds_smoke[0] = data["data"]["threshold"]["smoke"]["start"].get<int>();
+
+            /* create task to sync threshold */
+            xTaskCreateWithCaps(&Mqtt::notifySyncThresholdTrigger, "notifySyncThresholdTrigger", 4 * 1024, self, 6, NULL, MALLOC_CAP_SPIRAM);
+          }
+#endif
         }
       }
       catch (const std::exception &e)

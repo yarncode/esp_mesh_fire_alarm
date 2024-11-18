@@ -93,9 +93,9 @@ namespace common
   static const std::vector<int> CONFIG_THRESHOLD_HUMI = std::vector<int>{-2, -2};
   static const std::vector<int> CONFIG_THRESHOLD_SMOKE = std::vector<int>{500, -1};
 
-  static const std::string CONFIG_NOTIFY_SYNC_THRESHOLD = "sync_threshold";
-  static const std::string CONFIG_NOTIFY_SYNC_GPIO = "sync_gpio";
-  static const std::string CONFIG_NOTIFY_ACK_PAYLOAD = "ack_payload";
+  static const std::string CONFIG_NOTIFY_SYNC_THRESHOLD = "SYNC_THRESHOLD";
+  static const std::string CONFIG_NOTIFY_SYNC_GPIO = "SYNC_GPIO";
+  static const std::string CONFIG_NOTIFY_ACK_PAYLOAD = "ACK_PAYLOAD";
 
   static const std::string CONFIG_KEY_INPUT = "input";
   static const std::string CONFIG_KEY_OUTPUT = "output";
