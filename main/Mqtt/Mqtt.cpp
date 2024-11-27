@@ -88,7 +88,7 @@ void Mqtt::notifyDeviceCreated(void *arg)
   json body;
 
   body["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
-  body["mac"] = chipInfo::getMacDevice();
+  body["mac"] = chipInfo::getMacBleDevice();
   body["ip"] = cacheManager.ip;
   body["netmask"] = cacheManager.netmask;
   body["gateway"] = cacheManager.gateway;
