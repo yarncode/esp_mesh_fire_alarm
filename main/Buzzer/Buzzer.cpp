@@ -57,6 +57,8 @@ void Buzzer::stopWarning(void)
     vTaskDeleteWithCaps(_taskStartWarning);
     _taskStartWarning = nullptr;
   }
+
+  digitalWrite(GPIO_NUM_27, LOW);
   
   this->_stateWarning = false;
 }

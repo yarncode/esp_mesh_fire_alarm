@@ -221,7 +221,7 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     self->layer = esp_mesh_get_layer();
 
     /* start led notify mesh running */
-    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_LOOP_2DUP_SIGNAL));
+    // self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_LOOP_2DUP_SIGNAL));
     break;
   }
   case MESH_EVENT_STOPPED:
@@ -231,7 +231,7 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     self->_isNativeStart = false;
 
     /* stop led notify mesh running */
-    self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
+    // self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
     break;
   }
   case MESH_EVENT_CHILD_CONNECTED:

@@ -24,7 +24,7 @@ static TaskHandle_t _taskSampleValue = NULL;
 /* sht31 */
 
 /* mq2 */
-MQUnifiedsensor MQ2("ESP32", 3.3, 12, GPIO_NUM_34, "MQ-2");
+MQUnifiedsensor MQ2("ESP32", 5, 12, GPIO_NUM_34, "MQ-2");
 
 void Sensor::sampleValue(void *arg)
 {
@@ -43,20 +43,23 @@ void Sensor::sampleValue(void *arg)
     flag_warning = false;
 
     /* update data sensor MQ2 */
-    MQ2.update();
+    // MQ2.update();
 
     /* get temperature and humidity from sht31 */
     sht31_readTempHum();
 
     humidity = sht31_readHumidity();
     temperature = sht31_readTemperature();
+    smoke = analogRead(GPIO_NUM_34) * 4;
+
+    ESP_LOGI(TAG, "Sensor sampleValue: %f", smoke);
 
     time_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
     /* get smoke from data */
-    smoke = MQ2.readSensor();
+    // smoke = MQ2.readSensor();
 
-    body["smoke"] = std::isnan(smoke) || std::isinf(smoke) ? 0.0 : std::ceil(smoke * 100.0) / 100.0;
+    body["smoke"] = std::isnan(smoke) || std::isinf(smoke) ? 0.0 : smoke;
     body["temperature"] = std::isnan(temperature) ? 0.0 : std::ceil(temperature * 100.0) / 100.0;
     body["humidity"] = std::isnan(humidity) ? 0.0 : std::ceil(humidity * 100.0) / 100.0;
 
@@ -118,12 +121,14 @@ void Sensor::init(void *arg)
 {
   Sensor *self = static_cast<Sensor *>(arg);
 
-  MQ2.setRegressionMethod(1); //_PPM =  a*ratio^b
+  // MQ2.setRegressionMethod(1); //_PPM =  a*ratio^b
   /* Configure the equation to to calculate LPG concentration */
-  MQ2.setA(30000000);
-  MQ2.setB(-8.308);
-  MQ2.setRL(1);
-  MQ2.init();
+  // MQ2.setA(30000000);
+  // MQ2.setB(-8.308);
+  // MQ2.setRL(1);
+  // MQ2.init();
+
+  // pinMode(GPIO_NUM_34, INPUT);
 
   /* setup gpio input */
   int index = 0;
@@ -139,15 +144,15 @@ void Sensor::init(void *arg)
   sht31_init();
 
   /* Start calibrate */
-  ESP_LOGI(TAG, "Calibrate R0");
-  float calcR0 = 0;
-  for (int i = 1; i <= 10; i++)
-  {
-    MQ2.update(); // Update data, the arduino will read the voltage from the analog pin
-    calcR0 += MQ2.calibrate(9.83);
-  }
-  MQ2.setR0(calcR0 / 10);
-  ESP_LOGI(TAG, "Calibrate done.");
+  // ESP_LOGI(TAG, "Calibrate R0");
+  // float calcR0 = 0;
+  // for (int i = 1; i <= 10; i++)
+  // {
+  //   MQ2.update(); // Update data, the arduino will read the voltage from the analog pin
+  //   calcR0 += MQ2.calibrate(9.83);
+  // }
+  // MQ2.setR0(calcR0 / 10);
+  // ESP_LOGI(TAG, "Calibrate done.");
 
   ESP_LOGI(TAG, "Sensor init");
   xTaskCreateWithCaps(&Sensor::sampleValue, "Sensor::sampleValue", 4 * 1024, self, 5, &_taskSampleValue, MALLOC_CAP_SPIRAM);
