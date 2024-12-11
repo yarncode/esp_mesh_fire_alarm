@@ -37,13 +37,13 @@ extern "C" void app_main(void)
     ApiCaller api;
     Sntp sntp;
     Relay relay;
+    Sensor sensor;
 
 #ifdef CONFIG_MODE_GATEWAY
     LCDScreen screen;
 #endif
 
 #ifdef CONFIG_MODE_NODE
-    Sensor sensor;
     Buzzer buzzer;
 #endif
 
@@ -64,13 +64,13 @@ extern "C" void app_main(void)
     mesh.registerTwoWayObserver(&api, CentralServices::API_CALLER);
     mesh.registerTwoWayObserver(&sntp, CentralServices::SNTP);
     mqtt.registerTwoWayObserver(&relay, CentralServices::RELAY);
+    mqtt.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
 
 #ifdef CONFIG_MODE_GATEWAY
     screen.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
 #endif
 
 #ifdef CONFIG_MODE_NODE
-    mqtt.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
     mqtt.registerTwoWayObserver(&buzzer, CentralServices::BUZZER);
     buzzer.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
 #endif
@@ -85,10 +85,7 @@ extern "C" void app_main(void)
     factory.registerObserver(&storage, CentralServices::STORAGE);
 
     storage.start(); // run first storage
-
-#ifdef CONFIG_MODE_NODE
     sensor.start();  // run sensor
-#endif
 
 #ifdef CONFIG_MODE_GATEWAY
     screen.start();    // run lcd
