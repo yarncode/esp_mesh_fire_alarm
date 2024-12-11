@@ -109,7 +109,7 @@ void Sensor::sampleValue(void *arg) {
       flag_warning = true;
     }
 
-    if (flag_warning) {
+    if (flag_warning || cacheManager.input_state[0] == true) {
       /* debounce for 10 seconds */
       if (buzzer->stateWarning() == false && time_now - time_last > 10) {
         buzzer->startWarning();
@@ -180,22 +180,11 @@ void Sensor::stop(void) {
 void Sensor::init(void *arg) {
   Sensor *self = static_cast<Sensor *>(arg);
 
-  // MQ2.setRegressionMethod(1); //_PPM =  a*ratio^b
-  /* Configure the equation to to calculate LPG concentration */
-  // MQ2.setA(30000000);
-  // MQ2.setB(-8.308);
-  // MQ2.setRL(1);
-  // MQ2.init();
-
-  // pinMode(GPIO_NUM_34, INPUT);
-
   /* setup gpio input */
   int index = 0;
   for (auto it = common::CONFIG_GPIO_INPUT.begin();
        it != common::CONFIG_GPIO_INPUT.end(); it++) {
     gpio_num_t pin = it->second.gpio;
-    // pinMode(pin, INPUT);
-    // cacheManager.input_state[index] = digitalRead(pin);
 
     ESP_LOGI(TAG, "install input pin: %d", pin);
 
@@ -239,15 +228,6 @@ void Sensor::init(void *arg) {
   sht31_init();
 #endif
 
-  /* Start calibrate */
-  // ESP_LOGI(TAG, "Calibrate R0");
-  // float calcR0 = 0;
-  // for (int i = 1; i <= 10; i++)
-  // {
-  //   MQ2.update(); // Update data, the arduino will read the voltage from the
-  //   analog pin calcR0 += MQ2.calibrate(9.83);
-  // }
-  // MQ2.setR0(calcR0 / 10);
   // ESP_LOGI(TAG, "Calibrate done.");
 #ifdef CONFIG_MODE_NODE
 

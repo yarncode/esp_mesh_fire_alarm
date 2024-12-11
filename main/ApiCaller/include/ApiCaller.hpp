@@ -34,4 +34,5 @@ private:
   static void addDevice(void *arg);
 
   bool _cache_api_call_recently;
+  int _count_retry = 0;
 };
