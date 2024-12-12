@@ -1,4 +1,4 @@
-menu "Fire Alarm Configuration"
+menu "Fire Alarm Configuration (v1.0.12)"
 
     config HOST_SERVER
         string "Host Server"
