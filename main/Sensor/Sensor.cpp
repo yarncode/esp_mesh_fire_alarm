@@ -109,7 +109,7 @@ void Sensor::sampleValue(void *arg) {
       flag_warning = true;
     }
 
-    if (flag_warning || cacheManager.input_state[0] == true) {
+    if (flag_warning || cacheManager.input_state[0] == false) {
       /* debounce for 10 seconds */
       if (buzzer->stateWarning() == false && time_now - time_last > 10) {
         buzzer->startWarning();
@@ -143,7 +143,7 @@ void Sensor::gpioInterrupt(void *arg) {
     int pos = _gb_gpio_pos.find((gpio_num_t)io_num) != _gb_gpio_pos.end()
                   ? _gb_gpio_pos[(gpio_num_t)io_num]
                   : -1;
-    bool state = gpio_get_level((gpio_num_t)io_num) == 1 ? true : false;
+    bool state = gpio_get_level((gpio_num_t)io_num) == 1 ? false : true;
 
     if (pos >= 0) {
       ESP_LOGI(TAG, "Found gpio %d at pos %d", (int)io_num, pos);
