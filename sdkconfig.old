@@ -385,9 +385,9 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
-# Fire Alarm Configuration
+# Fire Alarm Configuration (v1.0.12)
 #
-CONFIG_HOST_SERVER="192.168.1.22"
+CONFIG_HOST_SERVER="36.50.135.141"
 CONFIG_HOST_API_PORT=3300
 CONFIG_HOST_MQTT_PORT=1883
 CONFIG_ENTRY_PATH="api"
@@ -397,7 +397,7 @@ CONFIG_MODE_GATEWAY=y
 CONFIG_MESH_ROUTE_TABLE_SIZE=50
 CONFIG_MESH_MAX_LAYER=6
 # CONFIG_MESH_USE_GLOBAL_DNS_IP is not set
-# end of Fire Alarm Configuration
+# end of Fire Alarm Configuration (v1.0.12)
 
 #
 # Arduino Configuration

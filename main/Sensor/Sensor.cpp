@@ -109,7 +109,8 @@ void Sensor::sampleValue(void *arg) {
       flag_warning = true;
     }
 
-    if (flag_warning || cacheManager.input_state[0] == false) {
+    if (flag_warning ||
+        gpio_get_level(common::CONFIG_GPIO_INPUT.at(0).gpio) == 0) {
       /* debounce for 10 seconds */
       if (buzzer->stateWarning() == false && time_now - time_last > 10) {
         buzzer->startWarning();
@@ -135,10 +136,12 @@ void Sensor::gpioInterrupt(void *arg) {
   uint32_t io_num;
   json _body;
   Mqtt *mqtt = static_cast<Mqtt *>(self->getObserver(CentralServices::MQTT));
+  Buzzer *buzzer =
+      static_cast<Buzzer *>(self->getObserver(CentralServices::BUZZER));
 
   while (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY) == pdPASS) {
-    ESP_LOGI(TAG, "GPIO[%" PRIu32 "] intr, val: %d\n", io_num,
-             gpio_get_level((gpio_num_t)io_num));
+    // ESP_LOGI(TAG, "GPIO[%" PRIu32 "] intr, val: %d\n", io_num,
+    //          gpio_get_level((gpio_num_t)io_num));
 
     int pos = _gb_gpio_pos.find((gpio_num_t)io_num) != _gb_gpio_pos.end()
                   ? _gb_gpio_pos[(gpio_num_t)io_num]
@@ -146,7 +149,13 @@ void Sensor::gpioInterrupt(void *arg) {
     bool state = gpio_get_level((gpio_num_t)io_num) == 1 ? false : true;
 
     if (pos >= 0) {
-      ESP_LOGI(TAG, "Found gpio %d at pos %d", (int)io_num, pos);
+      ESP_LOGI(TAG, "-> [gpio]-[%d]-[%s]", (int)io_num, state ? "HIGH" : "LOW");
+
+      if (buzzer->stateWarning() == false && state == true) {
+        buzzer->startWarning();
+      } else {
+        buzzer->stopWarning();
+      }
 
       _body["timestamp"] = std::chrono::system_clock::to_time_t(
           std::chrono::system_clock::now());
@@ -216,7 +225,7 @@ void Sensor::init(void *arg) {
     index++;
   }
 
-  gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+  gpio_evt_queue = xQueueCreate(1, sizeof(uint32_t));
 
   if (gpio_evt_queue != NULL) {
     xTaskCreateWithCaps(&Sensor::gpioInterrupt, "Sensor::gpioInterrupt",

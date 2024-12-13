@@ -88,7 +88,7 @@ extern "C" void app_main(void)
     sensor.start();  // run sensor
 
 #ifdef CONFIG_MODE_GATEWAY
-    screen.start();    // run lcd
+    // screen.start();    // run lcd
 #endif
 
 #ifdef CONFIG_MODE_NODE
