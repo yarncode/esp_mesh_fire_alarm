@@ -1,11 +1,13 @@
 #include "Mesh.hpp"
 #include "ApiCaller.hpp"
-#include "SNTP.hpp"
+#include "Button.hpp"
+#include "Buzzer.hpp"
 #include "Cache.h"
 #include "Helper.hpp"
-#include "Storage.hpp"
-#include "Button.hpp"
 #include "Led.hpp"
+#include "Relay.hpp"
+#include "SNTP.hpp"
+#include "Storage.hpp"
 
 #ifdef CONFIG_MODE_GATEWAY
 #include "Arduino.h"
@@ -18,9 +20,9 @@
 #endif
 
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 using namespace ServicePayload;
 using namespace ServiceType;
@@ -47,16 +49,13 @@ esp_netif_t *gb_eth_netif = nullptr;
 
 static const char *TAG = "Mesh";
 
-typedef struct
-{
+typedef struct {
   mesh_addr_t *from;
   mesh_data_t *data;
 } mesh_custom_data_t;
 
-void free_mesh_custom_data(mesh_custom_data_t *data)
-{
-  if (data == NULL)
-  {
+void free_mesh_custom_data(mesh_custom_data_t *data) {
+  if (data == NULL) {
     return;
   }
   free(data->data);
@@ -64,15 +63,12 @@ void free_mesh_custom_data(mesh_custom_data_t *data)
   free(data);
 }
 
-void Mesh::transmitDemo(void *arg)
-{
+void Mesh::transmitDemo(void *arg) {
   Mesh *self = static_cast<Mesh *>(arg);
   const char *payload = "Hello World";
-  while (true)
-  {
+  while (true) {
     /* send message from node -> root */
-    if (esp_mesh_is_root() == false)
-    {
+    if (esp_mesh_is_root() == false) {
       ESP_LOGI(TAG, "Sending message to ROOT...");
       self->sendMessage(NULL, (uint8_t *)payload, strlen(payload));
     }
@@ -84,8 +80,7 @@ void Mesh::transmitDemo(void *arg)
 #ifdef CONFIG_MODE_GATEWAY
 
 void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
-                             int32_t event_id, void *event_data)
-{
+                             int32_t event_id, void *event_data) {
   Mesh *self = static_cast<Mesh *>(arg); // get instance
 
   uint8_t mac_addr[6] = {0};
@@ -93,10 +88,8 @@ void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
   esp_eth_handle_t eth_handle = *(esp_eth_handle_t *)event_data;
   esp_netif_dhcp_status_t gb_eth_dhcpc_status;
 
-  switch (event_id)
-  {
-  case ETHERNET_EVENT_CONNECTED:
-  {
+  switch (event_id) {
+  case ETHERNET_EVENT_CONNECTED: {
     esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
     esp_netif_dhcpc_get_status(gb_eth_netif, &gb_eth_dhcpc_status);
 
@@ -107,8 +100,7 @@ void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
     break;
   }
 
-  case ETHERNET_EVENT_DISCONNECTED:
-  {
+  case ETHERNET_EVENT_DISCONNECTED: {
     cacheManager.ip = ""; // reset ip
     ESP_LOGI(TAG, "Ethernet Link Down");
     break;
@@ -130,11 +122,11 @@ void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
 #endif
 
 void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
-                            int32_t event_id, void *event_data)
-{
+                            int32_t event_id, void *event_data) {
   Mesh *self = static_cast<Mesh *>(arg); // get instance
   Sntp *sntp = static_cast<Sntp *>(self->getObserver(CentralServices::SNTP));
-  ApiCaller *api = static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
+  ApiCaller *api =
+      static_cast<ApiCaller *>(self->getObserver(CentralServices::API_CALLER));
 
   ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
   esp_netif_t *netif = event->esp_netif;
@@ -145,10 +137,11 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
   self->currentIp.addr = event->ip_info.ip.addr;
 
   /* ignore if state api is creating device */
-  if (api->isCallingCreateDevice() == false)
-  {
+  if (api->isCallingCreateDevice() == false) {
     /* start MQTT service */
-    self->notify(self->_service, CentralServices::MQTT, new RecievePayload_2<MqttEventType, nullptr_t>(MqttEventType::EVENT_MQTT_START, nullptr));
+    self->notify(self->_service, CentralServices::MQTT,
+                 new RecievePayload_2<MqttEventType, nullptr_t>(
+                     MqttEventType::EVENT_MQTT_START, nullptr));
   }
 
 #ifdef CONFIG_MODE_GATEWAY
@@ -177,10 +170,11 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
 
   mesh_netif_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
 
-  if (cacheManager.activeToken.length() > 0)
-  {
+  if (cacheManager.activeToken.length() > 0) {
     /* add device to server */
-    self->notify(self->_service, CentralServices::API_CALLER, new RecievePayload_2<ApiCallerType, nullptr_t>(ApiCallerType::EVENT_API_CALLER_ADD_DEVICE, nullptr));
+    self->notify(self->_service, CentralServices::API_CALLER,
+                 new RecievePayload_2<ApiCallerType, nullptr_t>(
+                     ApiCallerType::EVENT_API_CALLER_ADD_DEVICE, nullptr));
   }
 
 #endif
@@ -194,96 +188,91 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
   storage.saveWifiConfig();
 
   /* start SNTP service */
-  if (sntp->sntpState() == false)
-  {
+  if (sntp->sntpState() == false) {
     /* start service time if not running */
     sntp->start();
-  }
-  else
-  {
+  } else {
     /* just restart service */
     sntp->restart();
   }
 }
 
 void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
-                              int32_t event_id, void *event_data)
-{
+                              int32_t event_id, void *event_data) {
   Mesh *self = static_cast<Mesh *>(arg); // get instance
 
-  switch (event_id)
-  {
-  case MESH_EVENT_STARTED:
-  {
+  switch (event_id) {
+  case MESH_EVENT_STARTED: {
     esp_mesh_get_id(&self->meshAddress);
-    ESP_LOGI(TAG, "<MESH_EVENT_MESH_STARTED>ID:" MACSTR "", MAC2STR(self->meshAddress.addr));
+    ESP_LOGI(TAG, "<MESH_EVENT_MESH_STARTED>ID:" MACSTR "",
+             MAC2STR(self->meshAddress.addr));
     self->_isNativeStart = true;
     self->layer = esp_mesh_get_layer();
 
     /* start led notify mesh running */
-    // self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_LOOP_2DUP_SIGNAL));
+    // self->notify(self->_service, CentralServices::LED, new
+    // RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE,
+    // LED_LOOP_2DUP_SIGNAL));
     break;
   }
-  case MESH_EVENT_STOPPED:
-  {
+  case MESH_EVENT_STOPPED: {
     ESP_LOGI(TAG, "<MESH_EVENT_STOPPED>");
     self->layer = esp_mesh_get_layer();
     self->_isNativeStart = false;
 
     /* stop led notify mesh running */
-    // self->notify(self->_service, CentralServices::LED, new RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE, LED_MODE_NONE));
+    // self->notify(self->_service, CentralServices::LED, new
+    // RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE,
+    // LED_MODE_NONE));
     break;
   }
-  case MESH_EVENT_CHILD_CONNECTED:
-  {
-    mesh_event_child_connected_t *child_connected = (mesh_event_child_connected_t *)event_data;
+  case MESH_EVENT_CHILD_CONNECTED: {
+    mesh_event_child_connected_t *child_connected =
+        (mesh_event_child_connected_t *)event_data;
     ESP_LOGI(TAG, "<MESH_EVENT_CHILD_CONNECTED>aid:%d, " MACSTR "",
-             child_connected->aid,
-             MAC2STR(child_connected->mac));
+             child_connected->aid, MAC2STR(child_connected->mac));
     break;
   }
-  case MESH_EVENT_CHILD_DISCONNECTED:
-  {
-    mesh_event_child_disconnected_t *child_disconnected = (mesh_event_child_disconnected_t *)event_data;
+  case MESH_EVENT_CHILD_DISCONNECTED: {
+    mesh_event_child_disconnected_t *child_disconnected =
+        (mesh_event_child_disconnected_t *)event_data;
     ESP_LOGI(TAG, "<MESH_EVENT_CHILD_DISCONNECTED>aid:%d, " MACSTR "",
-             child_disconnected->aid,
-             MAC2STR(child_disconnected->mac));
+             child_disconnected->aid, MAC2STR(child_disconnected->mac));
     break;
   }
-  case MESH_EVENT_ROUTING_TABLE_ADD:
-  {
-    mesh_event_routing_table_change_t *routing_table = (mesh_event_routing_table_change_t *)event_data;
+  case MESH_EVENT_ROUTING_TABLE_ADD: {
+    mesh_event_routing_table_change_t *routing_table =
+        (mesh_event_routing_table_change_t *)event_data;
     ESP_LOGW(TAG, "<MESH_EVENT_ROUTING_TABLE_ADD>add %d, new:%d",
-             routing_table->rt_size_change,
-             routing_table->rt_size_new);
+             routing_table->rt_size_change, routing_table->rt_size_new);
     break;
   }
-  case MESH_EVENT_ROUTING_TABLE_REMOVE:
-  {
-    mesh_event_routing_table_change_t *routing_table = (mesh_event_routing_table_change_t *)event_data;
+  case MESH_EVENT_ROUTING_TABLE_REMOVE: {
+    mesh_event_routing_table_change_t *routing_table =
+        (mesh_event_routing_table_change_t *)event_data;
     ESP_LOGW(TAG, "<MESH_EVENT_ROUTING_TABLE_REMOVE>remove %d, new:%d",
-             routing_table->rt_size_change,
-             routing_table->rt_size_new);
+             routing_table->rt_size_change, routing_table->rt_size_new);
     break;
   }
-  case MESH_EVENT_NO_PARENT_FOUND:
-  {
-    mesh_event_no_parent_found_t *no_parent = (mesh_event_no_parent_found_t *)event_data;
+  case MESH_EVENT_NO_PARENT_FOUND: {
+    mesh_event_no_parent_found_t *no_parent =
+        (mesh_event_no_parent_found_t *)event_data;
     ESP_LOGI(TAG, "<MESH_EVENT_NO_PARENT_FOUND>scan times:%d",
              no_parent->scan_times);
     break;
   }
-  case MESH_EVENT_PARENT_CONNECTED:
-  {
+  case MESH_EVENT_PARENT_CONNECTED: {
     mesh_event_connected_t *connected = (mesh_event_connected_t *)event_data;
     esp_mesh_get_id(&self->meshAddress);
     self->layer = connected->self_layer;
     memcpy(&self->parentAddress.addr, connected->connected.bssid, 6);
     ESP_LOGI(TAG,
-             "<MESH_EVENT_PARENT_CONNECTED>layer:%d-->%d, parent:" MACSTR "%s, ID:" MACSTR "",
+             "<MESH_EVENT_PARENT_CONNECTED>layer:%d-->%d, parent:" MACSTR
+             "%s, ID:" MACSTR "",
              self->lastLayer, self->layer, MAC2STR(self->parentAddress.addr),
-             esp_mesh_is_root() ? "<ROOT>" : (self->layer == 2) ? "<layer2>"
-                                                                : "",
+             esp_mesh_is_root()   ? "<ROOT>"
+             : (self->layer == 2) ? "<layer2>"
+                                  : "",
              MAC2STR(self->meshAddress.addr));
     self->lastLayer = self->layer;
     self->_isParentConnected = true;
@@ -295,20 +284,24 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     /* start task sending demo */
     // if (esp_mesh_is_root() == false)
     // {
-    //   xTaskCreate(Mesh::transmitDemo, "transmitDemo", 4 * 1024, self, 8, &_taskTxDemo);
+    //   xTaskCreate(Mesh::transmitDemo, "transmitDemo", 4 * 1024, self, 8,
+    //   &_taskTxDemo);
     // }
     break;
   }
-  case MESH_EVENT_PARENT_DISCONNECTED:
-  {
-    mesh_event_disconnected_t *disconnected = (mesh_event_disconnected_t *)event_data;
-    ESP_LOGI(TAG,
-             "<MESH_EVENT_PARENT_DISCONNECTED>reason:%d",
+  case MESH_EVENT_PARENT_DISCONNECTED: {
+    mesh_event_disconnected_t *disconnected =
+        (mesh_event_disconnected_t *)event_data;
+    ESP_LOGI(TAG, "<MESH_EVENT_PARENT_DISCONNECTED>reason:%d",
              disconnected->reason);
     self->_isParentConnected = false;
     self->layer = esp_mesh_get_layer();
 
 #ifdef CONFIG_MODE_NODE
+
+    // if(esp_mesh)
+    esp_mesh_set_type(MESH_IDLE);
+
     mesh_netifs_stop(false);
 #endif
 
@@ -320,117 +313,113 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     // }
     break;
   }
-  case MESH_EVENT_LAYER_CHANGE:
-  {
-    mesh_event_layer_change_t *layer_change = (mesh_event_layer_change_t *)event_data;
+  case MESH_EVENT_LAYER_CHANGE: {
+    mesh_event_layer_change_t *layer_change =
+        (mesh_event_layer_change_t *)event_data;
     self->layer = layer_change->new_layer;
-    ESP_LOGI(TAG, "<MESH_EVENT_LAYER_CHANGE>layer:%d-->%d%s",
-             self->lastLayer, self->layer,
-             esp_mesh_is_root() ? "<ROOT>" : (self->layer == 2) ? "<layer2>"
-                                                                : "");
+    ESP_LOGI(TAG, "<MESH_EVENT_LAYER_CHANGE>layer:%d-->%d%s", self->lastLayer,
+             self->layer,
+             esp_mesh_is_root()   ? "<ROOT>"
+             : (self->layer == 2) ? "<layer2>"
+                                  : "");
     self->lastLayer = self->layer;
     self->layer = self->layer;
     break;
   }
-  case MESH_EVENT_ROOT_ADDRESS:
-  {
-    mesh_event_root_address_t *root_addr = (mesh_event_root_address_t *)event_data;
+  case MESH_EVENT_ROOT_ADDRESS: {
+    mesh_event_root_address_t *root_addr =
+        (mesh_event_root_address_t *)event_data;
     ESP_LOGI(TAG, "<MESH_EVENT_ROOT_ADDRESS>root address:" MACSTR "",
              MAC2STR(root_addr->addr));
     break;
   }
-  case MESH_EVENT_VOTE_STARTED:
-  {
-    mesh_event_vote_started_t *vote_started = (mesh_event_vote_started_t *)event_data;
+  case MESH_EVENT_VOTE_STARTED: {
+    mesh_event_vote_started_t *vote_started =
+        (mesh_event_vote_started_t *)event_data;
     ESP_LOGI(TAG,
-             "<MESH_EVENT_VOTE_STARTED>attempts:%d, reason:%d, rc_addr:" MACSTR "",
-             vote_started->attempts,
-             vote_started->reason,
+             "<MESH_EVENT_VOTE_STARTED>attempts:%d, reason:%d, rc_addr:" MACSTR
+             "",
+             vote_started->attempts, vote_started->reason,
              MAC2STR(vote_started->rc_addr.addr));
     break;
   }
-  case MESH_EVENT_VOTE_STOPPED:
-  {
+  case MESH_EVENT_VOTE_STOPPED: {
     ESP_LOGI(TAG, "<MESH_EVENT_VOTE_STOPPED>");
     break;
   }
-  case MESH_EVENT_ROOT_SWITCH_REQ:
-  {
-    mesh_event_root_switch_req_t *switch_req = (mesh_event_root_switch_req_t *)event_data;
-    ESP_LOGI(TAG,
-             "<MESH_EVENT_ROOT_SWITCH_REQ>reason:%d, rc_addr:" MACSTR "",
-             switch_req->reason,
-             MAC2STR(switch_req->rc_addr.addr));
+  case MESH_EVENT_ROOT_SWITCH_REQ: {
+    mesh_event_root_switch_req_t *switch_req =
+        (mesh_event_root_switch_req_t *)event_data;
+    ESP_LOGI(TAG, "<MESH_EVENT_ROOT_SWITCH_REQ>reason:%d, rc_addr:" MACSTR "",
+             switch_req->reason, MAC2STR(switch_req->rc_addr.addr));
     break;
   }
-  case MESH_EVENT_ROOT_SWITCH_ACK:
-  {
+  case MESH_EVENT_ROOT_SWITCH_ACK: {
     /* new root */
     self->layer = esp_mesh_get_layer();
     esp_mesh_get_parent_bssid(&self->parentAddress);
-    ESP_LOGI(TAG, "<MESH_EVENT_ROOT_SWITCH_ACK>layer:%d, parent:" MACSTR "", self->layer, MAC2STR(self->parentAddress.addr));
+    ESP_LOGI(TAG, "<MESH_EVENT_ROOT_SWITCH_ACK>layer:%d, parent:" MACSTR "",
+             self->layer, MAC2STR(self->parentAddress.addr));
     break;
   }
-  case MESH_EVENT_TODS_STATE:
-  {
+  case MESH_EVENT_TODS_STATE: {
     mesh_event_toDS_state_t *toDs_state = (mesh_event_toDS_state_t *)event_data;
     ESP_LOGI(TAG, "<MESH_EVENT_TODS_REACHABLE>state:%d", *toDs_state);
     break;
   }
-  case MESH_EVENT_ROOT_FIXED:
-  {
+  case MESH_EVENT_ROOT_FIXED: {
     mesh_event_root_fixed_t *root_fixed = (mesh_event_root_fixed_t *)event_data;
     ESP_LOGI(TAG, "<MESH_EVENT_ROOT_FIXED>%s",
              root_fixed->is_fixed ? "fixed" : "not fixed");
     break;
   }
-  case MESH_EVENT_ROOT_ASKED_YIELD:
-  {
-    mesh_event_root_conflict_t *root_conflict = (mesh_event_root_conflict_t *)event_data;
+  case MESH_EVENT_ROOT_ASKED_YIELD: {
+    mesh_event_root_conflict_t *root_conflict =
+        (mesh_event_root_conflict_t *)event_data;
     ESP_LOGI(TAG,
              "<MESH_EVENT_ROOT_ASKED_YIELD>" MACSTR ", rssi:%d, capacity:%d",
-             MAC2STR(root_conflict->addr),
-             root_conflict->rssi,
+             MAC2STR(root_conflict->addr), root_conflict->rssi,
              root_conflict->capacity);
     break;
   }
-  case MESH_EVENT_CHANNEL_SWITCH:
-  {
-    mesh_event_channel_switch_t *channel_switch = (mesh_event_channel_switch_t *)event_data;
-    ESP_LOGI(TAG, "<MESH_EVENT_CHANNEL_SWITCH>new channel:%d", channel_switch->channel);
+  case MESH_EVENT_CHANNEL_SWITCH: {
+    mesh_event_channel_switch_t *channel_switch =
+        (mesh_event_channel_switch_t *)event_data;
+    ESP_LOGI(TAG, "<MESH_EVENT_CHANNEL_SWITCH>new channel:%d",
+             channel_switch->channel);
     break;
   }
-  case MESH_EVENT_SCAN_DONE:
-  {
+  case MESH_EVENT_SCAN_DONE: {
     mesh_event_scan_done_t *scan_done = (mesh_event_scan_done_t *)event_data;
-    ESP_LOGI(TAG, "<MESH_EVENT_SCAN_DONE>number:%d",
-             scan_done->number);
+    ESP_LOGI(TAG, "<MESH_EVENT_SCAN_DONE>number:%d", scan_done->number);
     break;
   }
-  case MESH_EVENT_NETWORK_STATE:
-  {
-    mesh_event_network_state_t *network_state = (mesh_event_network_state_t *)event_data;
+  case MESH_EVENT_NETWORK_STATE: {
+    mesh_event_network_state_t *network_state =
+        (mesh_event_network_state_t *)event_data;
     ESP_LOGI(TAG, "<MESH_EVENT_NETWORK_STATE>is_rootless:%d",
              network_state->is_rootless);
     break;
   }
-  case MESH_EVENT_STOP_RECONNECTION:
-  {
+  case MESH_EVENT_STOP_RECONNECTION: {
     ESP_LOGI(TAG, "<MESH_EVENT_STOP_RECONNECTION>");
     break;
   }
-  case MESH_EVENT_FIND_NETWORK:
-  {
-    mesh_event_find_network_t *find_network = (mesh_event_find_network_t *)event_data;
-    ESP_LOGI(TAG, "<MESH_EVENT_FIND_NETWORK>new channel:%d, router BSSID:" MACSTR "",
+  case MESH_EVENT_FIND_NETWORK: {
+    mesh_event_find_network_t *find_network =
+        (mesh_event_find_network_t *)event_data;
+    ESP_LOGI(TAG,
+             "<MESH_EVENT_FIND_NETWORK>new channel:%d, router BSSID:" MACSTR "",
              find_network->channel, MAC2STR(find_network->router_bssid));
     break;
   }
-  case MESH_EVENT_ROUTER_SWITCH:
-  {
-    mesh_event_router_switch_t *router_switch = (mesh_event_router_switch_t *)event_data;
-    ESP_LOGI(TAG, "<MESH_EVENT_ROUTER_SWITCH>new router:%s, channel:%d, " MACSTR "",
-             router_switch->ssid, router_switch->channel, MAC2STR(router_switch->bssid));
+  case MESH_EVENT_ROUTER_SWITCH: {
+    mesh_event_router_switch_t *router_switch =
+        (mesh_event_router_switch_t *)event_data;
+    ESP_LOGI(TAG,
+             "<MESH_EVENT_ROUTER_SWITCH>new router:%s, channel:%d, " MACSTR "",
+             router_switch->ssid, router_switch->channel,
+             MAC2STR(router_switch->bssid));
     break;
   }
   default:
@@ -445,38 +434,96 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
  * This function is called when the mesh network receives a data message.
  * It will copy the received data and send it to the `_queueReciveMsg` queue.
  *
- * @param from pointer to a `mesh_addr_t` structure containing the source MAC address
+ * @param from pointer to a `mesh_addr_t` structure containing the source MAC
+ * address
  * @param data pointer to a `mesh_data_t` structure containing the received data
  *
  * This function is non-blocking and does not return any status.
  */
-void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data)
-{
-  /* step 1: malloc mesh_custom_data_t pointer */
-  mesh_custom_data_t *custom_data = (mesh_custom_data_t *)malloc(sizeof(mesh_custom_data_t));
-  if (custom_data == NULL)
-  {
-    ESP_LOGE(TAG, "Malloc mesh_custom_data_t failed.");
+void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data) {
+
+  if (_instance == nullptr) {
     return;
   }
-  custom_data->from = (mesh_addr_t *)malloc(sizeof(mesh_addr_t));
-  custom_data->data = (mesh_data_t *)malloc(sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)));
 
-  /* step 2: copy data */
-  memcpy(custom_data->from, from, sizeof(mesh_addr_t));
-  memcpy(custom_data->data, data, sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)));
+  /* step 1: malloc mesh_custom_data_t pointer */
+  // mesh_custom_data_t *custom_data =
+  //     (mesh_custom_data_t *)malloc(sizeof(mesh_custom_data_t));
+  // if (custom_data == NULL) {
+  //   ESP_LOGE(TAG, "Malloc mesh_custom_data_t failed.");
+  //   return;
+  // }
 
-  /* step 3: send to queue */
-  if (_queueReciveMsg != NULL)
-  {
-    if (xQueueSend(_queueReciveMsg, &custom_data, 0) != pdPASS)
-    {
-      ESP_LOGE(TAG, "Queue {_queueReciveMsg} send failed");
-      free_mesh_custom_data(custom_data);
+  // memset(custom_data, 0, sizeof(mesh_custom_data_t));
 
-      /* clear queue */
-      xQueueReset(_queueReciveMsg);
+  // custom_data->from = (mesh_addr_t *)malloc(sizeof(mesh_addr_t));
+  // custom_data->data = (mesh_data_t *)malloc(sizeof(mesh_data_t) +
+  //                                           (data->size * sizeof(uint8_t)));
+
+  // memset(custom_data->from, 0, sizeof(mesh_addr_t));
+  // memset(custom_data->data, 0,
+  //        sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)));
+
+  // /* step 2: copy data */
+  // memcpy(custom_data->from, from, sizeof(mesh_addr_t));
+  // memcpy(custom_data->data, data, sizeof(mesh_data_t) + (data->size *
+  // sizeof(uint8_t)));
+
+  // /* step 3: send to queue */
+  // if (_queueReciveMsg != NULL) {
+  //   if (xQueueSend(_queueReciveMsg, &custom_data, 0) != pdPASS) {
+  //     ESP_LOGE(TAG, "Queue {_queueReciveMsg} send failed");
+  //     free_mesh_custom_data(custom_data);
+
+  //     /* clear queue */
+  //     xQueueReset(_queueReciveMsg);
+  //   } else {
+  //     ESP_LOGW(TAG,
+  //              "RAW Mesh Data from: " MACSTR
+  //              " size-data: %d, size-struct: %d, data: %s",
+  //              MAC2STR(custom_data->from->addr), custom_data->data->size,
+  //              sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)),
+  //              (char *)custom_data->data->data);
+  //   }
+  // }
+
+  try {
+    std::string payload((char *)data->data, (int)(data->size));
+    ESP_LOGI(TAG, "Mesh Data from: [" MACSTR "] => size: %d => %s",
+             MAC2STR(from->addr), data->size, (char *)data->data);
+
+    /* broadcast message to all node child */
+    if (esp_mesh_is_root()) {
+      if (_instance != nullptr) {
+        _instance->sendMessageAllNodeExceptNode(data->data, data->size,
+                                                from->addr);
+      }
     }
+    /* handle message from here */
+    json j = json::parse(payload);
+
+#ifdef CONFIG_MODE_NODE
+    if (j["code"] == common::CONFIG_MESH_CODE_SET_BUZZER) {
+      Buzzer *buzzer = static_cast<Buzzer *>(
+          _instance->getObserver(CentralServices::BUZZER));
+      if (buzzer->stateWarning() == false && j["state"] == true) {
+        buzzer->startWarning();
+      } else if (j["state"] == false) {
+        buzzer->stopWarning();
+      }
+    } else if (j["code"] == common::CONFIG_MESH_CODE_SET_RELAY) {
+      Relay *relay =
+          static_cast<Relay *>(_instance->getObserver(CentralServices::RELAY));
+
+      const int pos = j["pos"];
+      const bool state = j["state"];
+
+      relay->setStateRelay(pos, state, false, true);
+    }
+#endif
+
+  } catch (const std::exception &e) {
+    std::cerr << e.what() << '\n';
   }
 }
 
@@ -490,48 +537,119 @@ void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data)
  * Uses the MESH_DATA_P2P protocol to send the data directly to the specified
  * node. This function is non-blocking and does not return any status.
  */
-void Mesh::sendMessage(uint8_t *addr, uint8_t *data, uint16_t len)
-{
+void Mesh::sendMessage(uint8_t *addr, uint8_t *data, uint16_t len) {
   mesh_addr_t to;
   mesh_data_t payload;
   payload.data = data;
   payload.size = len;
   payload.proto = MESH_PROTO_JSON; // sending from root AP -> Node's STA
   payload.tos = MESH_TOS_P2P;
-  if (addr != NULL)
-  {
+  if (addr != NULL) {
     memcpy(to.addr, addr, 6);
   }
-  esp_err_t err = esp_mesh_send(addr ? &to : NULL, &payload, MESH_DATA_P2P, NULL, 0);
-  if (ESP_OK != err)
-  {
+  esp_err_t err =
+      esp_mesh_send(addr ? &to : NULL, &payload, MESH_DATA_P2P, NULL, 0);
+  if (ESP_OK != err) {
     ESP_LOGE(TAG, "Send with err code %d %s", err, esp_err_to_name(err));
   }
 }
 
-void Mesh::recieveMsg(void *arg)
-{
+void Mesh::sendMessageAllNode(uint8_t *data, uint16_t len) {
+  if (esp_mesh_is_root()) {
+    int total = esp_mesh_get_total_node_num();
+    ESP_LOGI(TAG, "Send message to %d node.", total);
+    if (total > 1) {
+      mesh_addr_t route_table[CONFIG_MESH_ROUTE_TABLE_SIZE];
+      int route_table_size = 0;
+      mesh_addr_t *_addr;
+      esp_mesh_get_routing_table((mesh_addr_t *)&route_table,
+                                 CONFIG_MESH_ROUTE_TABLE_SIZE * 6,
+                                 &route_table_size);
+      for (int i = 1; i < route_table_size; i++) {
+        ESP_LOGI(TAG, "Send message to [" MACSTR "].",
+                 MAC2STR(route_table[i].addr));
+        this->sendMessage(route_table[i].addr, data, len);
+      }
+    }
+  } else {
+    ESP_LOGI(TAG, "Send message to root.");
+    this->sendMessage(NULL, data, len);
+  }
+}
+
+void Mesh::sendMessageAllNodeExceptNode(uint8_t *data, uint16_t len,
+                                        uint8_t *addr) {
+  if (esp_mesh_is_root()) {
+    int total = esp_mesh_get_total_node_num();
+    ESP_LOGI(TAG, "Send message to %d node.", total);
+    if (total > 1) {
+      mesh_addr_t route_table[CONFIG_MESH_ROUTE_TABLE_SIZE];
+      int route_table_size = 0;
+      mesh_addr_t *_addr;
+      esp_mesh_get_routing_table((mesh_addr_t *)&route_table,
+                                 CONFIG_MESH_ROUTE_TABLE_SIZE * 6,
+                                 &route_table_size);
+      for (int i = 1; i < route_table_size; i++) {
+        if (memcmp(route_table[i].addr, addr, 6) != 0) {
+          ESP_LOGI(TAG, "Send message to [" MACSTR "].",
+                   MAC2STR(route_table[i].addr));
+          this->sendMessage(route_table[i].addr, data, len);
+        }
+      }
+    }
+  }
+}
+
+void Mesh::recieveMsg(void *arg) {
   Mesh *self = static_cast<Mesh *>(arg);
+  Buzzer *buzzer =
+      static_cast<Buzzer *>(self->getObserver(CentralServices::BUZZER));
   mesh_custom_data_t *data;
 
-  while (true)
-  {
-    if (_queueReciveMsg == NULL)
-    {
+  while (true) {
+    if (_queueReciveMsg == NULL) {
       ESP_LOGW(TAG, "Queue recieve msg is null.");
       vTaskDelay(1000 / portTICK_PERIOD_MS);
       continue;
     }
-    if (xQueueReceive(_queueReciveMsg, &data, portMAX_DELAY) == pdPASS)
-    {
-      try
-      {
-        std::string payload((char *)data->data->data, (int)(data->data->size));
-        ESP_LOGI(TAG, "Mesh Data from: [" MACSTR "] => %s", MAC2STR(data->from->addr), payload.c_str());
+    if (xQueueReceive(_queueReciveMsg, &data, portMAX_DELAY) == pdPASS) {
+      try {
+        // std::string payload((char *)data->data->data,
+        // (int)(data->data->size));
+        ESP_LOGI(TAG, "Mesh Data from: [" MACSTR "] => size: %d => %s",
+                 MAC2STR(data->from->addr), data->data->size,
+                 (char *)data->data->data);
+
+        /* broadcast message to all node child */
+        if (esp_mesh_is_root()) {
+          self->sendMessageAllNodeExceptNode(data->data->data, data->data->size,
+                                             data->from->addr);
+        }
         /* handle message from here */
-      }
-      catch (const std::exception &e)
-      {
+
+        // json j = json::parse(payload);
+
+        // #ifdef CONFIG_MODE_NODE
+        //         if (j["code"] == common::CONFIG_MESH_CODE_SET_BUZZER) {
+        //           if (buzzer->stateWarning() == false && j["state"] == true)
+        //           {
+        //             buzzer->startWarning();
+        //           } else if (j["state"] == false) {
+        //             buzzer->stopWarning();
+        //           }
+        //         } else if (j["code"] == common::CONFIG_MESH_CODE_SET_RELAY) {
+        //           Relay *relay =
+        //               static_cast<Relay
+        //               *>(self->getObserver(CentralServices::RELAY));
+
+        //           const int pos = j["pos"];
+        //           const bool state = j["state"];
+
+        //           relay->setStateRelay(pos, state, false, true);
+        //         }
+        // #endif
+
+      } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
       }
 
@@ -541,15 +659,14 @@ void Mesh::recieveMsg(void *arg)
   }
 }
 
-void Mesh::start(void)
-{
-  // if (_condition_state[CentralServices::BUTTON] == false || _condition_state[CentralServices::STORAGE] == false)
+void Mesh::start(void) {
+  // if (_condition_state[CentralServices::BUTTON] == false ||
+  // _condition_state[CentralServices::STORAGE] == false)
   // {
   //   ESP_LOGW(TAG, "Condition not ready");
   //   return;
   // }
-  if (this->_isStarted)
-  {
+  if (this->_isStarted) {
     ESP_LOGW(TAG, "Mesh already started");
     return;
   }
@@ -557,10 +674,8 @@ void Mesh::start(void)
   xTaskCreate(&Mesh::init, "Mesh::init", 4 * 1024, this, 5, NULL);
 }
 
-void Mesh::stop(void)
-{
-  if (!this->_isStarted)
-  {
+void Mesh::stop(void) {
+  if (!this->_isStarted) {
     ESP_LOGW(TAG, "Mesh already stopped");
     return;
   }
@@ -568,8 +683,7 @@ void Mesh::stop(void)
   xTaskCreate(&Mesh::deinit, "Mesh::deinit", 4 * 1024, this, 5, NULL);
 }
 
-void Mesh::deinit(void *arg)
-{
+void Mesh::deinit(void *arg) {
   Mesh *self = static_cast<Mesh *>(arg);
 
   self->stopWifiAndMesh();
@@ -578,15 +692,10 @@ void Mesh::deinit(void *arg)
   vTaskDelete(NULL);
 }
 
-bool Mesh::isStarted(void)
-{
-  return _instance->_isNativeStart;
-}
+bool Mesh::isStarted(void) { return _instance->_isNativeStart; }
 
-void Mesh::initWiFiNative(void)
-{
-  if (this->_isStartBaseWiFi)
-  {
+void Mesh::initWiFiNative(void) {
+  if (this->_isStartBaseWiFi) {
     return;
   }
   ESP_LOGI(TAG, "Start wifi native...");
@@ -599,7 +708,8 @@ void Mesh::initWiFiNative(void)
   // #endif
 
 #ifdef CONFIG_MODE_NODE
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Mesh::ip_event_handler, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                             &Mesh::ip_event_handler, this));
 #endif
 
   ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_FLASH));
@@ -608,32 +718,30 @@ void Mesh::initWiFiNative(void)
   this->_isStartBaseWiFi = true;
 }
 
-void Mesh::deinitWiFiNative(void)
-{
-  if (this->_isStartBaseWiFi == false)
-  {
+void Mesh::deinitWiFiNative(void) {
+  if (this->_isStartBaseWiFi == false) {
     return;
   }
   ESP_LOGI(TAG, "Deinit wifi native...");
 
-  ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &Mesh::ip_event_handler));
+  ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                               &Mesh::ip_event_handler));
   ESP_ERROR_CHECK(esp_wifi_stop());
   ESP_ERROR_CHECK(esp_wifi_deinit());
 
   this->_isStartBaseWiFi = false;
 }
 
-void Mesh::initMeshNative(void)
-{
-  if (this->_isStartBaseMesh)
-  {
+void Mesh::initMeshNative(void) {
+  if (this->_isStartBaseMesh) {
     return;
   }
 
   ESP_LOGI(TAG, "Start mesh native...");
 
   ESP_ERROR_CHECK(esp_mesh_init());
-  ESP_ERROR_CHECK(esp_event_handler_register(MESH_EVENT, ESP_EVENT_ANY_ID, &Mesh::mesh_event_handler, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(MESH_EVENT, ESP_EVENT_ANY_ID,
+                                             &Mesh::mesh_event_handler, this));
   ESP_ERROR_CHECK(esp_mesh_set_max_layer(CONFIG_MESH_MAX_LAYER));
   ESP_ERROR_CHECK(esp_mesh_set_vote_percentage(1));
   ESP_ERROR_CHECK(esp_mesh_set_ap_assoc_expire(10));
@@ -644,37 +752,56 @@ void Mesh::initMeshNative(void)
   /* router */
   memcpy((uint8_t *)&cfg.mesh_id, this->meshId, 6);
 
-  // #ifdef CONFIG_MODE_NODE
-  cfg.allow_channel_switch = true;
-  cfg.router.ssid_len = cacheManager.ssid.length();
-  cfg.router.allow_router_switch = true;
-  memcpy((uint8_t *)&cfg.router.ssid, cacheManager.ssid.c_str(), cfg.router.ssid_len);
-  memcpy((uint8_t *)&cfg.router.password, cacheManager.password.c_str(), cacheManager.password.length());
-  // #endif
+// #ifdef CONFIG_MODE_NODE
+//   cfg.router.ssid_len = cacheManager.ssid.length();
+//   cfg.router.allow_router_switch = true;
+//   memcpy((uint8_t *)&cfg.router.ssid, cacheManager.ssid.c_str(),
+//          cfg.router.ssid_len);
+//   memcpy((uint8_t *)&cfg.router.password, cacheManager.password.c_str(),
+//          cacheManager.password.length());
+// #elif CONFIG_MODE_GATEWAY
+
+//   cfg.router.ssid_len = 32;
+//   uint8_t ssid[32] = {0};
+//   uint8_t password[64] = {0};
+
+//   memcpy((uint8_t *)&cfg.router.ssid, ssid, 32);
+//   memcpy((uint8_t *)&cfg.router.password, password, 64);
+
+// #endif
+
+  cfg.router.ssid_len = 32;
+  uint8_t ssid[32] = {0};
+  uint8_t password[64] = {0};
+
+  memcpy((uint8_t *)&cfg.router.ssid, ssid, 32);
+  memcpy((uint8_t *)&cfg.router.password, password, 64);
 
   /* mesh softAP */
   ESP_ERROR_CHECK(esp_mesh_set_ap_authmode(WIFI_AUTH_WPA2_PSK));
   cfg.mesh_ap.max_connection = 6;
   cfg.mesh_ap.nonmesh_max_connection = 0;
-  memcpy((uint8_t *)&cfg.mesh_ap.password, this->meshPassword.c_str(), this->meshPassword.length());
+  memcpy((uint8_t *)&cfg.mesh_ap.password, this->meshPassword.c_str(),
+         this->meshPassword.length());
   ESP_ERROR_CHECK(esp_mesh_set_config(&cfg));
 
 #ifdef CONFIG_MODE_GATEWAY
   esp_mesh_set_type(MESH_ROOT);
+#elif CONFIG_MODE_NODE
+  esp_mesh_set_type(MESH_NODE);
 #endif
 
   this->_isStartBaseMesh = true;
 }
 
-void Mesh::deinitMeshNative(void)
-{
-  if (this->_isStartBaseMesh == false)
-  {
+void Mesh::deinitMeshNative(void) {
+  if (this->_isStartBaseMesh == false) {
     return;
   }
   ESP_LOGI(TAG, "Deinit mesh native...");
 
-  ESP_ERROR_CHECK(esp_event_handler_unregister(MESH_EVENT, ESP_EVENT_ANY_ID, &Mesh::mesh_event_handler));
+  ESP_ERROR_CHECK(esp_event_handler_unregister(MESH_EVENT, ESP_EVENT_ANY_ID,
+                                               &Mesh::mesh_event_handler));
   ESP_ERROR_CHECK(esp_mesh_stop());
   ESP_ERROR_CHECK(esp_mesh_deinit());
 
@@ -688,11 +815,9 @@ void Mesh::deinitMeshNative(void)
 
 #ifdef CONFIG_MODE_GATEWAY
 
-void Mesh::startEthernet(void)
-{
+void Mesh::startEthernet(void) {
 
-  if (this->_isStartEthernet)
-  {
+  if (this->_isStartEthernet) {
     return;
   }
 
@@ -702,33 +827,34 @@ void Mesh::startEthernet(void)
   char if_desc_str[10];
 
   // Initialize Ethernet driver
-  while (ethernet_init_all(&eth_handles, &eth_port_cnt) != ESP_OK)
-  {
+  while (ethernet_init_all(&eth_handles, &eth_port_cnt) != ESP_OK) {
     ESP_LOGE(TAG, "Ethernet initialization failed, retrying...");
     vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
 
   // Attach Ethernet driver to TCP/IP stack
-  ESP_ERROR_CHECK(esp_netif_attach(gb_eth_netif, esp_eth_new_netif_glue(eth_handles[0])));
+  ESP_ERROR_CHECK(
+      esp_netif_attach(gb_eth_netif, esp_eth_new_netif_glue(eth_handles[0])));
 
   // Register user defined event handers
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &Mesh::ip_event_handler, this));
-  ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &Mesh::eth_event_handler, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP,
+                                             &Mesh::ip_event_handler, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID,
+                                             &Mesh::eth_event_handler, this));
 
   ESP_ERROR_CHECK(esp_eth_start(eth_handles[0]));
 
   eth_dev_info_t info = ethernet_init_get_dev_info(&eth_handles[0]);
-  if (info.type == ETH_DEV_TYPE_INTERNAL_ETH)
-  {
+  if (info.type == ETH_DEV_TYPE_INTERNAL_ETH) {
     ESP_LOGI(TAG, "Device Name: %s", info.name);
     ESP_LOGI(TAG, "Device type: ETH_DEV_TYPE_INTERNAL_ETH(%d)", info.type);
-    ESP_LOGI(TAG, "Pins: mdc: %d, mdio: %d", info.pin.eth_internal_mdc, info.pin.eth_internal_mdio);
-  }
-  else if (info.type == ETH_DEV_TYPE_SPI)
-  {
+    ESP_LOGI(TAG, "Pins: mdc: %d, mdio: %d", info.pin.eth_internal_mdc,
+             info.pin.eth_internal_mdio);
+  } else if (info.type == ETH_DEV_TYPE_SPI) {
     ESP_LOGI(TAG, "Device Name: %s", info.name);
     ESP_LOGI(TAG, "Device type: ETH_DEV_TYPE_SPI(%d)", info.type);
-    ESP_LOGI(TAG, "Pins: cs: %d, intr: %d", info.pin.eth_spi_cs, info.pin.eth_spi_int);
+    ESP_LOGI(TAG, "Pins: cs: %d, intr: %d", info.pin.eth_spi_cs,
+             info.pin.eth_spi_int);
   }
 
   this->_isStartEthernet = true;
@@ -736,54 +862,48 @@ void Mesh::startEthernet(void)
 
 #endif
 
-void Mesh::startWiFi(void)
-{
+void Mesh::startWiFi(void) {
   this->initWiFiNative();
   ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-void Mesh::startMesh(void)
-{
+void Mesh::startMesh(void) {
   this->initMeshNative();
   // /* mesh start */
   ESP_ERROR_CHECK(esp_mesh_start());
 }
 
-void Mesh::startBase(void)
-{
-  if (this->_isStartBase)
-  {
+void Mesh::startBase(void) {
+  if (this->_isStartBase) {
     return;
   }
 
   ESP_LOGI(TAG, "Start base...");
-  if (this->_isStartTCP == false)
-  {
+  if (this->_isStartTCP == false) {
     /*  tcpip initialization */
     ESP_ERROR_CHECK(esp_netif_init());
     this->_isStartTCP = true;
   }
 
-  if (this->_isStartLoopDefault == false)
-  {
+  if (this->_isStartLoopDefault == false) {
     /*  event initialization */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     this->_isStartLoopDefault = true;
   }
 
-  if (_queueReciveMsg == nullptr)
-  {
+  if (_queueReciveMsg == nullptr) {
     _queueReciveMsg = xQueueCreate(10, sizeof(mesh_custom_data_t *));
   }
 
-  if (_taskRecieveMsg == nullptr)
-  {
-    xTaskCreateWithCaps(&this->recieveMsg, "recieveMsg", 4 * 1024, this, 5, &_taskRecieveMsg, MALLOC_CAP_SPIRAM);
+  if (_taskRecieveMsg == nullptr) {
+    xTaskCreateWithCaps(&this->recieveMsg, "recieveMsg", 8 * 1024, this, 5,
+                        &_taskRecieveMsg, MALLOC_CAP_SPIRAM);
   }
 
   // if (this->_isStartNetIF == false)
   // {
-  /*  crete network interfaces for mesh (only station instance saved for further manipulation, soft AP instance ignored */
+  /*  crete network interfaces for mesh (only station instance saved for further
+   * manipulation, soft AP instance ignored */
 
 #ifdef CONFIG_MODE_GATEWAY
   gb_eth_netif = mesh_netifs_eth_init(this->callbackData);
@@ -796,20 +916,16 @@ void Mesh::startBase(void)
   this->_isStartBase = true;
 }
 
-void Mesh::deinitBase(void)
-{
-  if (this->_isStartBase == false)
-  {
+void Mesh::deinitBase(void) {
+  if (this->_isStartBase == false) {
     return;
   }
 
-  if (_queueReciveMsg != nullptr)
-  {
+  if (_queueReciveMsg != nullptr) {
     xQueueReset(_queueReciveMsg);
   }
 
-  if (_taskRecieveMsg != nullptr)
-  {
+  if (_taskRecieveMsg != nullptr) {
     vTaskDeleteWithCaps(_taskRecieveMsg);
     _taskRecieveMsg = nullptr;
   }
@@ -818,8 +934,7 @@ void Mesh::deinitBase(void)
   this->_isStartBase = false;
 }
 
-void Mesh::init(void *arg)
-{
+void Mesh::init(void *arg) {
   Mesh *self = static_cast<Mesh *>(arg);
 
   /* start setup default startup */
@@ -830,8 +945,7 @@ void Mesh::init(void *arg)
   self->startEthernet();
 #endif
 
-  if (cacheManager.ssid.length() == 0)
-  {
+  if (cacheManager.ssid.length() == 0) {
     ESP_LOGW(TAG, "WiFi config not found.");
     vTaskDelete(NULL);
     return;
@@ -848,40 +962,33 @@ void Mesh::init(void *arg)
   vTaskDelete(NULL);
 }
 
-void Mesh::stopWifiAndMesh(void)
-{
+void Mesh::stopWifiAndMesh(void) {
   this->deinitWiFiNative();
   this->deinitMeshNative();
   this->deinitBase();
   this->_isStarted = false;
 }
 
-void Mesh::handleFactory(void *arg)
-{
+void Mesh::handleFactory(void *arg) {
   ESP_LOGW(TAG, "Mesh handle factory...");
   vTaskDelete(NULL);
 }
 
-void Mesh::onReceive(CentralServices s, void *data)
-{
+void Mesh::onReceive(CentralServices s, void *data) {
   std::cout << "Mesh onReceive from " << s << std::endl;
-  switch (s)
-  {
-  case CentralServices::REFACTOR:
-  {
+  switch (s) {
+  case CentralServices::REFACTOR: {
     xTaskCreate(this->handleFactory, "handleFactory", 4 * 1024, this, 10, NULL);
     break;
   }
 
-  case CentralServices::BLUETOOTH:
-  {
-    RecievePayload_2<MeshEventType, nullptr_t> *payload = static_cast<RecievePayload_2<MeshEventType, nullptr_t> *>(data);
+  case CentralServices::BLUETOOTH: {
+    RecievePayload_2<MeshEventType, nullptr_t> *payload =
+        static_cast<RecievePayload_2<MeshEventType, nullptr_t> *>(data);
 
-    if (payload->type == EVENT_MESH_START)
-    {
+    if (payload->type == EVENT_MESH_START) {
       ESP_LOGI(TAG, "BLUETOOTH request Mesh started.");
-      if (this->_isStarted == false)
-      {
+      if (this->_isStarted == false) {
         /* call func update router config */
 
         /* and then start service mesh again */
@@ -892,15 +999,13 @@ void Mesh::onReceive(CentralServices s, void *data)
     break;
   }
 
-  case CentralServices::STORAGE:
-  {
-    RecievePayload_2<MeshEventType, nullptr_t> *payload = static_cast<RecievePayload_2<MeshEventType, nullptr_t> *>(data);
+  case CentralServices::STORAGE: {
+    RecievePayload_2<MeshEventType, nullptr_t> *payload =
+        static_cast<RecievePayload_2<MeshEventType, nullptr_t> *>(data);
 
-    if (payload->type == EVENT_MESH_START)
-    {
+    if (payload->type == EVENT_MESH_START) {
       ESP_LOGI(TAG, "STORAGE request Mesh started.");
-      if (this->_isStarted == false)
-      {
+      if (this->_isStarted == false) {
         /* call func update router config */
 
         /* and then start service mesh again */

@@ -25,8 +25,8 @@ public:
   void start(void);
   void stop(void);
 
-  void startWarning(void);
-  void stopWarning(void);
+  void startWarning(bool syncWarn = false);
+  void stopWarning(bool syncWarn = false);
   bool stateWarning(void);
 
 private:

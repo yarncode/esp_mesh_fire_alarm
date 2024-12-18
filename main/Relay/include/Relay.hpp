@@ -1,18 +1,18 @@
 #pragma once
 
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
 #include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 
-#include "Observer.h"
 #include "ConstType.h"
 #include "EventType.hpp"
+#include "Observer.h"
 
 enum ModeControl {
   SINGLE,
@@ -20,17 +20,14 @@ enum ModeControl {
   ALL,
 };
 
-class Relay : public Observer
-{
+class Relay : public Observer {
 public:
-  Relay()
-  {
-    this->_service = CentralServices::RELAY;
-  };
+  Relay() { this->_service = CentralServices::RELAY; };
   void onReceive(CentralServices s, void *data) override;
   void start(void);
   void stop(void);
-  void setStateRelay(int pin, bool state);
+  void setStateRelay(int pin, bool state, bool saveNvs = true,
+                     bool syncOnline = false, bool syncOtherNode = false);
 
 private:
   static void init(void *arg);

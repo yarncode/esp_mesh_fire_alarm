@@ -1,29 +1,27 @@
 #pragma once
 
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/task.h"
 
-#include "Observer.h"
 #include "ConstType.h"
 #include "EventType.hpp"
+#include "Observer.h"
 
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_mesh.h"
 #include "esp_wifi.h"
-#include "esp_mac.h"
 
-class Mesh : public Observer
-{
+class Mesh : public Observer {
 public:
-  Mesh()
-  {
+  Mesh() {
     this->_service = CentralServices::MESH;
     this->_instance = this;
   };
@@ -34,6 +32,9 @@ public:
   void startWiFi(void);
   void startMesh(void);
   bool isStarted(void);
+  void sendMessageAllNode(uint8_t *data, uint16_t len);
+  void sendMessageAllNodeExceptNode(uint8_t *data, uint16_t len,
+                                          uint8_t *addr);
 
 #ifdef CONFIG_MODE_GATEWAY
   void startEthernet(void);
@@ -47,9 +48,12 @@ public:
   esp_ip4_addr_t currentIp;
 
 private:
-  static void eth_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
-  static void mesh_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
-  static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
+  static void eth_event_handler(void *arg, esp_event_base_t event_base,
+                                int32_t event_id, void *event_data);
+  static void mesh_event_handler(void *arg, esp_event_base_t event_base,
+                                 int32_t event_id, void *event_data);
+  static void ip_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data);
   static void init(void *arg);
   static void deinit(void *arg);
   static void handleFactory(void *arg);

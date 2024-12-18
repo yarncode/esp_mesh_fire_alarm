@@ -133,7 +133,7 @@ void ApiCaller::addDevice(void *arg) {
   /* add info device to body */
   json body;
   body["type_node"] = common::CONFIG_NODE_TYPE_DEVICE;
-  body["mac"] = chipInfo::getMacDevice();
+  body["mac"] = chipInfo::getMacBleDevice();
 
   std::string payload = body.dump();
   esp_http_client_set_post_field(client, payload.c_str(), payload.length());

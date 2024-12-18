@@ -124,8 +124,8 @@ void Mqtt::onConnected(void *handler_args, esp_event_base_t base,
 
   // xTaskCreateWithCaps(&Mqtt::notifySyncThresholdTrigger,
   // "notifySyncThresholdTrigger", 4 * 1024, self, 6, NULL, MALLOC_CAP_SPIRAM);
-  xTaskCreateWithCaps(&Mqtt::notifyDeviceCreated, "notifyDeviceCreated",
-                      4 * 1024, self, 5, NULL, MALLOC_CAP_SPIRAM);
+  // xTaskCreateWithCaps(&Mqtt::notifyDeviceCreated, "notifyDeviceCreated",
+  //                     4 * 1024, self, 5, NULL, MALLOC_CAP_SPIRAM);
   xTaskCreateWithCaps(&Mqtt::notifySyncGpio, "notifySyncGpio", 4 * 1024, self,
                       7, NULL, MALLOC_CAP_SPIRAM);
 }
@@ -413,7 +413,7 @@ void Mqtt::init(void *arg) {
   if (cacheManager.m_username.length() == 0 ||
       cacheManager.m_password.length() == 0) {
     ESP_LOGE(TAG, "Username or password is empty.");
-    vTaskDelete(NULL);
+    vTaskDeleteWithCaps(NULL);
   }
 
   std::string url = std::string("mqtt://") + std::string(CONFIG_HOST_SERVER) +
@@ -434,7 +434,7 @@ void Mqtt::init(void *arg) {
                            .password = cacheManager.m_password.c_str(),
                        }},
       .session{
-          .keepalive = 5, // 5s
+          .keepalive = 15, // 5s
       },
       .task{
           .priority = 5,

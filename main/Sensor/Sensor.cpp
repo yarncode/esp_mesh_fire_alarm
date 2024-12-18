@@ -1,7 +1,9 @@
 #include "Sensor.hpp"
 #include "Buzzer.hpp"
 #include "Cache.h"
+#include "Mesh.hpp"
 #include "Mqtt.hpp"
+#include "Relay.hpp"
 
 #include "MQSensor.h"
 
@@ -113,13 +115,13 @@ void Sensor::sampleValue(void *arg) {
         gpio_get_level(common::CONFIG_GPIO_INPUT.at(0).gpio) == 0) {
       /* debounce for 10 seconds */
       if (buzzer->stateWarning() == false && time_now - time_last > 10) {
-        buzzer->startWarning();
+        buzzer->startWarning(true);
         time_last = time_now;
       }
     } else {
       /* check state warning & stop */
       if (buzzer->stateWarning()) {
-        buzzer->stopWarning();
+        buzzer->stopWarning(true);
       }
     }
 
@@ -136,39 +138,61 @@ void Sensor::gpioInterrupt(void *arg) {
   uint32_t io_num;
   json _body;
   Mqtt *mqtt = static_cast<Mqtt *>(self->getObserver(CentralServices::MQTT));
+#ifdef CONFIG_MODE_NODE
   Buzzer *buzzer =
       static_cast<Buzzer *>(self->getObserver(CentralServices::BUZZER));
+#endif
+  Relay *relay =
+      static_cast<Relay *>(self->getObserver(CentralServices::RELAY));
+  Mesh *mesh = static_cast<Mesh *>(self->getObserver(CentralServices::MESH));
 
   while (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY) == pdPASS) {
-    // ESP_LOGI(TAG, "GPIO[%" PRIu32 "] intr, val: %d\n", io_num,
-    //          gpio_get_level((gpio_num_t)io_num));
 
-    int pos = _gb_gpio_pos.find((gpio_num_t)io_num) != _gb_gpio_pos.end()
-                  ? _gb_gpio_pos[(gpio_num_t)io_num]
-                  : -1;
-    bool state = gpio_get_level((gpio_num_t)io_num) == 1 ? false : true;
+    try {
 
-    if (pos >= 0) {
-      ESP_LOGI(TAG, "-> [gpio]-[%d]-[%s]", (int)io_num, state ? "HIGH" : "LOW");
+      int pos = _gb_gpio_pos.find((gpio_num_t)io_num) != _gb_gpio_pos.end()
+                    ? _gb_gpio_pos[(gpio_num_t)io_num]
+                    : -1;
+      bool state = gpio_get_level((gpio_num_t)io_num) == 1 ? false : true;
 
-      if (buzzer->stateWarning() == false && state == true) {
-        buzzer->startWarning();
-      } else {
-        buzzer->stopWarning();
+      if (pos >= 0) {
+        ESP_LOGI(TAG, "-> [gpio]-[%d]-[%s]", (int)io_num,
+                 state ? "HIGH" : "LOW");
+
+#ifdef CONFIG_MODE_NODE
+        if (buzzer->stateWarning() == false && state == true) {
+          buzzer->startWarning(true);
+          relay->setStateRelay(0, true, false, true, true);
+        } else {
+          buzzer->stopWarning(true);
+          relay->setStateRelay(0, false, false, true, true);
+        }
+#endif
+
+        ESP_LOGI(TAG, "Sensor gpioInterrupt: %d, %d", pos, state);
+
+#ifdef CONFIG_MODE_GATEWAY
+        relay->setStateRelay(pos, state, false, true);
+#endif
+
+        if (state != cacheManager.input_state[pos]) {
+          _body["timestamp"] = std::chrono::system_clock::to_time_t(
+              std::chrono::system_clock::now());
+          _body["state"] = state;
+          _body["pos"] = pos;
+          _body["type"] = common::CONFIG_KEY_INPUT;
+          _body["mode"] = common::CONFIG_CONTROL_MODE_SINGLE_GPIO;
+
+          /* send to broker */
+          mqtt->sendMessage(ChannelMqtt::CHANNEL_IO_INPUT, _body.dump());
+        }
       }
 
-      _body["timestamp"] = std::chrono::system_clock::to_time_t(
-          std::chrono::system_clock::now());
-      _body["state"] = state;
-      _body["pos"] = pos;
-      _body["type"] = common::CONFIG_KEY_INPUT;
-      _body["mode"] = common::CONFIG_CONTROL_MODE_SINGLE_GPIO;
+      cacheManager.input_state[pos] = state;
 
-      /* send to broker */
-      mqtt->sendMessage(ChannelMqtt::CHANNEL_IO_INPUT, _body.dump());
+    } catch (const std::exception &e) {
+      std::cerr << e.what() << '\n';
     }
-
-    cacheManager.input_state[pos] = state;
   }
 
   vTaskDeleteWithCaps(NULL);
@@ -219,7 +243,7 @@ void Sensor::init(void *arg) {
     _gb_gpio_pos[pin] = index;
 
     /* read value */
-    cacheManager.input_state[index] = gpio_get_level(pin);
+    cacheManager.input_state[index] = gpio_get_level(pin) ? false : true;
     ESP_LOGI(TAG, "input state: %d", cacheManager.input_state[index]);
 
     index++;

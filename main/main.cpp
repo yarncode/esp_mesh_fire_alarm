@@ -64,7 +64,14 @@ extern "C" void app_main(void)
     mesh.registerTwoWayObserver(&api, CentralServices::API_CALLER);
     mesh.registerTwoWayObserver(&sntp, CentralServices::SNTP);
     mqtt.registerTwoWayObserver(&relay, CentralServices::RELAY);
+    mesh.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
     mqtt.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
+    relay.registerTwoWayObserver(&sensor, CentralServices::SENSOR);
+    mesh.registerTwoWayObserver(&relay, CentralServices::RELAY);
+
+#ifdef CONFIG_MODE_NODE
+    mesh.registerTwoWayObserver(&buzzer, CentralServices::BUZZER);
+#endif
 
 #ifdef CONFIG_MODE_GATEWAY
     screen.registerTwoWayObserver(&mqtt, CentralServices::MQTT);
@@ -88,7 +95,7 @@ extern "C" void app_main(void)
     sensor.start();  // run sensor
 
 #ifdef CONFIG_MODE_GATEWAY
-    // screen.start();    // run lcd
+    screen.start();    // run lcd
 #endif
 
 #ifdef CONFIG_MODE_NODE

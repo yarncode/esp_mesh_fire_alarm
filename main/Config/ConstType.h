@@ -102,6 +102,10 @@ static const std::string CONFIG_CONTROL_TYPE_BUZZER = "buzzer";
 static const std::string CONFIG_CONTROL_MODE_ALL_GPIO = "all";
 static const std::string CONFIG_CONTROL_MODE_MULTIPLE_GPIO = "mutiple";
 static const std::string CONFIG_CONTROL_MODE_SINGLE_GPIO = "single";
+
+static const std::string CONFIG_MESH_CODE_SET_BUZZER = "SET_BUZZER";
+static const std::string CONFIG_MESH_CODE_SET_RELAY = "SET_RELAY";
+
 } // namespace common
 
 #endif // CONST_TYPE_H

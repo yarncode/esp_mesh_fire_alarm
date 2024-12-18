@@ -91,6 +91,7 @@ static void receive_task(void *arg)
     {
         data.data = rx_buf;
         data.size = RX_SIZE;
+        memset(rx_buf, 0, RX_SIZE);
         err = esp_mesh_recv(&from, &data, portMAX_DELAY, &flag, NULL, 0);
         if (err != ESP_OK)
         {
@@ -280,7 +281,7 @@ mesh_netif_driver_t mesh_create_if_driver(bool is_ap, bool is_root)
     if (!receive_task_is_running)
     {
         receive_task_is_running = true;
-        xTaskCreate(receive_task, "netif rx task", 3072, NULL, 5, NULL);
+        xTaskCreate(receive_task, "netif rx task", 8 * 1024, NULL, 5, NULL);
     }
 
     // save station mac address to exclude it from routing-table on broadcast
