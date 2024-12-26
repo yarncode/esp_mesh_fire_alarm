@@ -67,7 +67,7 @@ void LCDScreen::init(void *arg)
     /* info ip gateway */
     self->writeByRow(0, 0, "IP: " + (cacheManager.ip.length() > 0 ? cacheManager.ip : std::string("No connect")));
     /* info count node childs */
-    self->writeByRow(1, 0, "Num: " + std::to_string((esp_mesh_get_routing_table_size() - 1)));
+    self->writeByRow(1, 0, "Num: " + std::to_string(esp_mesh_get_routing_table_size()));
     /* info ram size */
     // sprintf(msg, "Ram: %.1f KB", (float)esp_get_free_heap_size() / 1023);
     // self->writeByRow(2, 0, std::string(msg));

@@ -161,10 +161,10 @@ void Sensor::gpioInterrupt(void *arg) {
 
 #ifdef CONFIG_MODE_NODE
         if (buzzer->stateWarning() == false && state == true) {
-          buzzer->startWarning(true);
+          // buzzer->startWarning(true);
           relay->setStateRelay(0, true, false, true, true);
         } else {
-          buzzer->stopWarning(true);
+          // buzzer->stopWarning(true);
           relay->setStateRelay(0, false, false, true, true);
         }
 #endif
@@ -253,7 +253,7 @@ void Sensor::init(void *arg) {
 
   if (gpio_evt_queue != NULL) {
     xTaskCreateWithCaps(&Sensor::gpioInterrupt, "Sensor::gpioInterrupt",
-                        4 * 1024, self, 6, &_taskInputValue, MALLOC_CAP_SPIRAM);
+                        5 * 1024, self, 6, &_taskInputValue, MALLOC_CAP_SPIRAM);
   }
 
 #ifdef CONFIG_MODE_NODE

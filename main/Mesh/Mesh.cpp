@@ -88,6 +88,12 @@ void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
   esp_eth_handle_t eth_handle = *(esp_eth_handle_t *)event_data;
   esp_netif_dhcp_status_t gb_eth_dhcpc_status;
 
+  // esp_netif_dns_info_t dns;
+  // ESP_ERROR_CHECK(
+  //     esp_netif_get_dns_info(gb_eth_netif, ESP_NETIF_DNS_MAIN, &dns));
+
+  // ESP_LOGI(TAG, "Dns 1: " IPSTR, IP2STR(&dns.ip.u_addr.ip4));
+
   switch (event_id) {
   case ETHERNET_EVENT_CONNECTED: {
     esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
@@ -108,6 +114,7 @@ void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
 
   case ETHERNET_EVENT_START:
     ESP_LOGI(TAG, "Ethernet Started");
+    mesh_netif_eth_start_root_ap(true, htonl(0x08080808));
     break;
 
   case ETHERNET_EVENT_STOP:
@@ -133,6 +140,7 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
   esp_netif_dns_info_t dns;
 
   ESP_ERROR_CHECK(esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns));
+  ESP_LOGI(TAG, "DNS: " IPSTR, IP2STR(&dns.ip.u_addr.ip4));
 
   self->currentIp.addr = event->ip_info.ip.addr;
 
@@ -162,7 +170,7 @@ void Mesh::ip_event_handler(void *arg, esp_event_base_t event_base,
   // mesh_netifs_eth_start(esp_mesh_is_root());
   // esp_mesh_post_toDS_state(true);
 
-  mesh_netif_eth_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
+  // mesh_netif_eth_start_root_ap(esp_mesh_is_root(), dns.ip.u_addr.ip4.addr);
 
 #elif CONFIG_MODE_NODE
 
@@ -752,23 +760,23 @@ void Mesh::initMeshNative(void) {
   /* router */
   memcpy((uint8_t *)&cfg.mesh_id, this->meshId, 6);
 
-// #ifdef CONFIG_MODE_NODE
-//   cfg.router.ssid_len = cacheManager.ssid.length();
-//   cfg.router.allow_router_switch = true;
-//   memcpy((uint8_t *)&cfg.router.ssid, cacheManager.ssid.c_str(),
-//          cfg.router.ssid_len);
-//   memcpy((uint8_t *)&cfg.router.password, cacheManager.password.c_str(),
-//          cacheManager.password.length());
-// #elif CONFIG_MODE_GATEWAY
+  // #ifdef CONFIG_MODE_NODE
+  //   cfg.router.ssid_len = cacheManager.ssid.length();
+  //   cfg.router.allow_router_switch = true;
+  //   memcpy((uint8_t *)&cfg.router.ssid, cacheManager.ssid.c_str(),
+  //          cfg.router.ssid_len);
+  //   memcpy((uint8_t *)&cfg.router.password, cacheManager.password.c_str(),
+  //          cacheManager.password.length());
+  // #elif CONFIG_MODE_GATEWAY
 
-//   cfg.router.ssid_len = 32;
-//   uint8_t ssid[32] = {0};
-//   uint8_t password[64] = {0};
+  //   cfg.router.ssid_len = 32;
+  //   uint8_t ssid[32] = {0};
+  //   uint8_t password[64] = {0};
 
-//   memcpy((uint8_t *)&cfg.router.ssid, ssid, 32);
-//   memcpy((uint8_t *)&cfg.router.password, password, 64);
+  //   memcpy((uint8_t *)&cfg.router.ssid, ssid, 32);
+  //   memcpy((uint8_t *)&cfg.router.password, password, 64);
 
-// #endif
+  // #endif
 
   cfg.router.ssid_len = 32;
   uint8_t ssid[32] = {0};
