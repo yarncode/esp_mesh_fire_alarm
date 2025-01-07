@@ -37,10 +37,15 @@ void Buzzer::_startWarning(void *arg) {
 }
 
 void Buzzer::startWarning(bool syncWarn) {
+
+  if (this->ignoreWarning) {
+    return;
+  }
+
   ESP_LOGI(TAG, "Buzzer startWarning");
   Mesh *mesh = static_cast<Mesh *>(this->getObserver(CentralServices::MESH));
 
-  if (syncWarn) {
+  if (syncWarn && this->_stateWarning == false) {
     json body;
 
     body["timestamp"] =
@@ -61,6 +66,11 @@ void Buzzer::startWarning(bool syncWarn) {
 }
 
 void Buzzer::stopWarning(bool syncWarn) {
+
+  if (this->ignoreWarning) {
+    return;
+  }
+
   ESP_LOGI(TAG, "Buzzer stopWarning");
 
   Mesh *mesh = static_cast<Mesh *>(this->getObserver(CentralServices::MESH));
@@ -70,7 +80,7 @@ void Buzzer::stopWarning(bool syncWarn) {
     _taskStartWarning = nullptr;
   }
 
-  if (syncWarn) {
+  if (syncWarn && this->_stateWarning == true) {
     json body;
 
     body["timestamp"] =

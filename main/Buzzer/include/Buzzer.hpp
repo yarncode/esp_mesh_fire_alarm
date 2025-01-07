@@ -20,6 +20,7 @@ public:
   Buzzer()
   {
     this->_service = CentralServices::BUZZER;
+    this->ignoreWarning = false;
   };
   void onReceive(CentralServices s, void *data) override;
   void start(void);
@@ -28,6 +29,8 @@ public:
   void startWarning(bool syncWarn = false);
   void stopWarning(bool syncWarn = false);
   bool stateWarning(void);
+  void setIgnoreWarning(bool ignore) { this->ignoreWarning = ignore; }
+  bool getIgnoreWarning(void) { return this->ignoreWarning; }
 
 private:
   static void _startWarning(void *arg);
@@ -35,4 +38,5 @@ private:
   static void deinit(void *arg);
 
   bool _stateWarning = false;
+  bool ignoreWarning;
 };

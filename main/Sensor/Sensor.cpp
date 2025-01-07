@@ -52,10 +52,11 @@ void Sensor::sampleValue(void *arg) {
   bool flag_warning = false;
   time_t time_now;
   time_t time_last = 0;
+  bool flagSensorWarning = false;
 
   while (true) {
     /* reset state warning */
-    flag_warning = false;
+    flagSensorWarning = false;
 
 /* update data sensor MQ2 */
 // MQ2.update();
@@ -81,6 +82,7 @@ void Sensor::sampleValue(void *arg) {
     // smoke = MQ2.readSensor();
 
     body["smoke"] = std::isnan(smoke) || std::isinf(smoke) ? 0.0 : smoke;
+
 #ifdef CONFIG_MODE_NODE
 
     body["temperature"] =
@@ -102,16 +104,16 @@ void Sensor::sampleValue(void *arg) {
 #ifdef CONFIG_MODE_NODE
 
     if (temperature > cacheManager.thresholds_temp[0]) {
-      flag_warning = true;
+      flagSensorWarning = true;
+    }
+
+    if (smoke > cacheManager.thresholds_smoke[0]) {
+      flagSensorWarning = true;
     }
 
 #endif
 
-    if (smoke > cacheManager.thresholds_smoke[0]) {
-      flag_warning = true;
-    }
-
-    if (flag_warning ||
+    if (self->flagWarning || flagSensorWarning ||
         gpio_get_level(common::CONFIG_GPIO_INPUT.at(0).gpio) == 0) {
       /* debounce for 10 seconds */
       if (buzzer->stateWarning() == false && time_now - time_last > 10) {
@@ -120,9 +122,7 @@ void Sensor::sampleValue(void *arg) {
       }
     } else {
       /* check state warning & stop */
-      if (buzzer->stateWarning()) {
-        buzzer->stopWarning(true);
-      }
+      buzzer->stopWarning(true);
     }
 
     /* get value every 5 seconds */
@@ -147,6 +147,8 @@ void Sensor::gpioInterrupt(void *arg) {
   Mesh *mesh = static_cast<Mesh *>(self->getObserver(CentralServices::MESH));
 
   while (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY) == pdPASS) {
+
+    gpio_intr_disable((gpio_num_t)io_num);
 
     try {
 
@@ -193,6 +195,8 @@ void Sensor::gpioInterrupt(void *arg) {
     } catch (const std::exception &e) {
       std::cerr << e.what() << '\n';
     }
+
+    gpio_intr_enable((gpio_num_t)io_num);
   }
 
   vTaskDeleteWithCaps(NULL);

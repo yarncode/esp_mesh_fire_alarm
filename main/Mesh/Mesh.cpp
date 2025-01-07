@@ -7,6 +7,7 @@
 #include "Led.hpp"
 #include "Relay.hpp"
 #include "SNTP.hpp"
+#include "Sensor.hpp"
 #include "Storage.hpp"
 
 #ifdef CONFIG_MODE_GATEWAY
@@ -114,7 +115,6 @@ void Mesh::eth_event_handler(void *arg, esp_event_base_t event_base,
 
   case ETHERNET_EVENT_START:
     ESP_LOGI(TAG, "Ethernet Started");
-    mesh_netif_eth_start_root_ap(true, htonl(0x08080808));
     break;
 
   case ETHERNET_EVENT_STOP:
@@ -217,6 +217,18 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     self->_isNativeStart = true;
     self->layer = esp_mesh_get_layer();
 
+    if (esp_mesh_is_root_fixed()) {
+      ESP_LOGI(TAG, "Root is fixed");
+    }
+
+    if (esp_mesh_get_self_organized()) {
+      ESP_LOGI(TAG, "Self organized");
+    }
+
+#ifdef CONFIG_MODE_GATEWAY
+    mesh_netif_eth_start_root_ap(true, htonl(0x08080808));
+#endif
+
     /* start led notify mesh running */
     // self->notify(self->_service, CentralServices::LED, new
     // RecievePayload_2<LedType, led_custume_mode_t>(EVENT_LED_UPDATE_MODE,
@@ -286,7 +298,7 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     self->_isParentConnected = true;
 
 #ifdef CONFIG_MODE_NODE
-    mesh_netifs_start(esp_mesh_is_root());
+    mesh_netifs_start(false);
 #endif
 
     /* start task sending demo */
@@ -306,10 +318,7 @@ void Mesh::mesh_event_handler(void *arg, esp_event_base_t event_base,
     self->layer = esp_mesh_get_layer();
 
 #ifdef CONFIG_MODE_NODE
-
-    // if(esp_mesh)
     esp_mesh_set_type(MESH_IDLE);
-
     mesh_netifs_stop(false);
 #endif
 
@@ -454,47 +463,6 @@ void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data) {
     return;
   }
 
-  /* step 1: malloc mesh_custom_data_t pointer */
-  // mesh_custom_data_t *custom_data =
-  //     (mesh_custom_data_t *)malloc(sizeof(mesh_custom_data_t));
-  // if (custom_data == NULL) {
-  //   ESP_LOGE(TAG, "Malloc mesh_custom_data_t failed.");
-  //   return;
-  // }
-
-  // memset(custom_data, 0, sizeof(mesh_custom_data_t));
-
-  // custom_data->from = (mesh_addr_t *)malloc(sizeof(mesh_addr_t));
-  // custom_data->data = (mesh_data_t *)malloc(sizeof(mesh_data_t) +
-  //                                           (data->size * sizeof(uint8_t)));
-
-  // memset(custom_data->from, 0, sizeof(mesh_addr_t));
-  // memset(custom_data->data, 0,
-  //        sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)));
-
-  // /* step 2: copy data */
-  // memcpy(custom_data->from, from, sizeof(mesh_addr_t));
-  // memcpy(custom_data->data, data, sizeof(mesh_data_t) + (data->size *
-  // sizeof(uint8_t)));
-
-  // /* step 3: send to queue */
-  // if (_queueReciveMsg != NULL) {
-  //   if (xQueueSend(_queueReciveMsg, &custom_data, 0) != pdPASS) {
-  //     ESP_LOGE(TAG, "Queue {_queueReciveMsg} send failed");
-  //     free_mesh_custom_data(custom_data);
-
-  //     /* clear queue */
-  //     xQueueReset(_queueReciveMsg);
-  //   } else {
-  //     ESP_LOGW(TAG,
-  //              "RAW Mesh Data from: " MACSTR
-  //              " size-data: %d, size-struct: %d, data: %s",
-  //              MAC2STR(custom_data->from->addr), custom_data->data->size,
-  //              sizeof(mesh_data_t) + (data->size * sizeof(uint8_t)),
-  //              (char *)custom_data->data->data);
-  //   }
-  // }
-
   try {
     std::string payload((char *)data->data, (int)(data->size));
     ESP_LOGI(TAG, "Mesh Data from: [" MACSTR "] => size: %d => %s",
@@ -514,9 +482,13 @@ void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data) {
     if (j["code"] == common::CONFIG_MESH_CODE_SET_BUZZER) {
       Buzzer *buzzer = static_cast<Buzzer *>(
           _instance->getObserver(CentralServices::BUZZER));
+      Sensor *sensor = static_cast<Sensor *>(
+          _instance->getObserver(CentralServices::SENSOR));
       if (buzzer->stateWarning() == false && j["state"] == true) {
+        sensor->triggerWarning(true);
         buzzer->startWarning();
       } else if (j["state"] == false) {
+        sensor->triggerWarning(false);
         buzzer->stopWarning();
       }
     } else if (j["code"] == common::CONFIG_MESH_CODE_SET_RELAY) {
@@ -526,7 +498,7 @@ void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data) {
       const int pos = j["pos"];
       const bool state = j["state"];
 
-      relay->setStateRelay(pos, state, false, true);
+      relay->setStateRelay(pos, state);
     }
 #endif
 
@@ -546,6 +518,12 @@ void Mesh::callbackData(mesh_addr_t *from, mesh_data_t *data) {
  * node. This function is non-blocking and does not return any status.
  */
 void Mesh::sendMessage(uint8_t *addr, uint8_t *data, uint16_t len) {
+
+  if (this->_isParentConnected == false && esp_mesh_is_root() == false) {
+    ESP_LOGW(TAG, "Parent is not connected.");
+    return;
+  }
+
   mesh_addr_t to;
   mesh_data_t payload;
   payload.data = data;
@@ -753,30 +731,13 @@ void Mesh::initMeshNative(void) {
   ESP_ERROR_CHECK(esp_mesh_set_max_layer(CONFIG_MESH_MAX_LAYER));
   ESP_ERROR_CHECK(esp_mesh_set_vote_percentage(1));
   ESP_ERROR_CHECK(esp_mesh_set_ap_assoc_expire(10));
+  ESP_ERROR_CHECK(esp_mesh_send_block_time(5000));
   mesh_cfg_t cfg = MESH_INIT_CONFIG_DEFAULT();
 
   cfg.crypto_funcs = NULL;
 
   /* router */
   memcpy((uint8_t *)&cfg.mesh_id, this->meshId, 6);
-
-  // #ifdef CONFIG_MODE_NODE
-  //   cfg.router.ssid_len = cacheManager.ssid.length();
-  //   cfg.router.allow_router_switch = true;
-  //   memcpy((uint8_t *)&cfg.router.ssid, cacheManager.ssid.c_str(),
-  //          cfg.router.ssid_len);
-  //   memcpy((uint8_t *)&cfg.router.password, cacheManager.password.c_str(),
-  //          cacheManager.password.length());
-  // #elif CONFIG_MODE_GATEWAY
-
-  //   cfg.router.ssid_len = 32;
-  //   uint8_t ssid[32] = {0};
-  //   uint8_t password[64] = {0};
-
-  //   memcpy((uint8_t *)&cfg.router.ssid, ssid, 32);
-  //   memcpy((uint8_t *)&cfg.router.password, password, 64);
-
-  // #endif
 
   cfg.router.ssid_len = 32;
   uint8_t ssid[32] = {0};
@@ -792,6 +753,9 @@ void Mesh::initMeshNative(void) {
   memcpy((uint8_t *)&cfg.mesh_ap.password, this->meshPassword.c_str(),
          this->meshPassword.length());
   ESP_ERROR_CHECK(esp_mesh_set_config(&cfg));
+
+  /* fix root in network mesh */
+  // esp_mesh_fix_root(true);
 
 #ifdef CONFIG_MODE_GATEWAY
   esp_mesh_set_type(MESH_ROOT);

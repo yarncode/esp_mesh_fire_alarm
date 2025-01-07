@@ -19,14 +19,20 @@
 
 class Sensor : public Observer {
 public:
-  Sensor() { this->_service = CentralServices::SENSOR; };
+  Sensor() {
+    this->_service = CentralServices::SENSOR;
+    this->flagWarning = false;
+  };
   void onReceive(CentralServices s, void *data) override;
   void start(void);
   void stop(void);
+  void triggerWarning(bool ignore) { this->flagWarning = ignore; }
 
 private:
   static void init(void *arg);
   static void sampleValue(void *arg);
   static void deinit(void *arg);
   static void gpioInterrupt(void *arg);
+
+  bool flagWarning = false;
 };
